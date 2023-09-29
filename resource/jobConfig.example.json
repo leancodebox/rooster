@@ -1,0 +1,58 @@
+{
+  "config": {
+    "dashboard": {
+      "port": 9090
+    },
+    "options": {
+      "outputType": 1,
+      "outputPath": "tmp",
+      "maxFailures": 5
+    }
+  },
+  "residentTask": [
+    {
+      "jobName": "thh",
+      "binPath": "thh",
+      "params": [
+        "serve"
+      ],
+      "options": {
+        "outputType": 1,
+        "outputPath": "tmp",
+        "maxFailures": 5
+      },
+      "dir": "/Users/thh/workspace/thh",
+      "run": true
+    },
+    {
+      "jobName": "dt",
+      "binPath": "dt",
+      "params": [
+        "serve"
+      ],
+      "options": {
+        "outputType": 1,
+        "outputPath": "./tmp",
+        "maxFailures": 5
+      },
+      "dir": "/Users/thh/workspace/atool",
+      "run": true
+    }
+  ],
+  "scheduledTask": [
+    {
+      "jobName": "kuai",
+      "binPath": "kuai",
+      "params": [
+        "now"
+      ],
+      "options": {
+        "outputType": 1,
+        "outputPath": "tmp",
+        "maxFailures": 5
+      },
+      "spec": "* * * * *",
+      "run": true
+    }
+  ]
+}
