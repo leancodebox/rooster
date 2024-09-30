@@ -118,8 +118,8 @@ const columns = [
   }
 ]
 const data = ref([])
-const data4residentTask = ref([])
-const data4scheduledTask = ref([])
+const data4residentTask = ref<any>([])
+const data4scheduledTask = ref<any>([])
 
 onMounted(() => {
   getData(0)
@@ -129,14 +129,14 @@ const showModal = ref(false);
 const rules = {}
 const init = {
   jobName: "",
-  type: "1",
+  type: 1,
   spec: "* * * * *",
   binPath: "",
   dir: "",
   run: true,
   params: [],
   maxFailures: 3,
-  options:{
+  options: {
     maxFailures: 5,
     outputPath: "/tmp",
     outputType: 1
@@ -145,7 +145,8 @@ const init = {
 }
 const model = ref(init)
 
-function add(type) {
+function add(type: any) {
+  console.log(type)
   showModal.value = true
 }
 
@@ -156,10 +157,10 @@ function onNegativeClick() {
 }
 
 function onPositiveClick() {
-  saveEnv()
+
 }
 
-function edit(row) {
+function edit(row: any) {
   model.value = {
     jobName: row.jobName,
     type: row.type,
@@ -169,7 +170,7 @@ function edit(row) {
     run: true,
     params: row.params,
     maxFailures: 3,
-    options:row.options,
+    options: row.options,
     edit: true
   }
   showModal.value = true
@@ -178,8 +179,8 @@ function edit(row) {
 async function getData(show = 1) {
   let resp = await getJobList()
   data.value = resp.data.message
-  let wait4data4residentTask = [];
-  let wait4data4scheduledTask = [];
+  let wait4data4residentTask:any[] = [];
+  let wait4data4scheduledTask:any[] = [];
   for (let item in resp.data.message) {
     if (resp.data.message[item].type === 1) {
       wait4data4residentTask.push(resp.data.message[item])

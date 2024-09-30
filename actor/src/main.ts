@@ -8,7 +8,7 @@ import router from './router'
 
 const app = createApp(App)
 
-let title;  // 用于临时存放原来的title内容
+let title = "";  // 用于临时存放原来的title内容
 window.onblur = function () {
     // onblur时先存下原来的title,再更改title内容
     title = document.title;
