@@ -69,5 +69,6 @@ type JobConfig struct {
 type JobConfigV2 struct {
 	ResidentTask  []*Job     `json:"residentTask"`
 	ScheduledTask []*Job     `json:"scheduledTask"`
+	TaskList      []*Job     `json:"taskList"`
 	Config        BaseConfig `json:"config"`
 }
