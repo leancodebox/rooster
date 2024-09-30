@@ -58,12 +58,7 @@ type BaseConfig struct {
 	Dashboard struct {
 		Port int `json:"port"`
 	} `json:"dashboard"`
-}
-
-type JobConfig struct {
-	ResidentTask  []Job      `json:"residentTask"`
-	ScheduledTask []Job      `json:"scheduledTask"`
-	Config        BaseConfig `json:"config"`
+	DefaultOptions RunOptions `json:"defaultOptions"` // 运行选项
 }
 
 type JobConfigV2 struct {
@@ -71,4 +66,23 @@ type JobConfigV2 struct {
 	ScheduledTask []*Job     `json:"scheduledTask"`
 	TaskList      []*Job     `json:"taskList"`
 	Config        BaseConfig `json:"config"`
+}
+
+func (itself *JobConfigV2) GetResidentTask() []*Job {
+	r := []*Job{}
+	for _, item := range itself.TaskList {
+		if item.Type == 1 {
+			r = append(r, item)
+		}
+	}
+	return r
+}
+func (itself *JobConfigV2) GetScheduledTask() []*Job {
+	r := []*Job{}
+	for _, item := range itself.TaskList {
+		if item.Type == 2 {
+			r = append(r, item)
+		}
+	}
+	return r
 }

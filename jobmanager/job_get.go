@@ -37,10 +37,10 @@ func job2jobStatus(job Job) JobStatus {
 
 func JobList() []JobStatus {
 	var jobNameList []JobStatus
-	for _, job := range jobConfigV2.ResidentTask {
+	for _, job := range jobConfigV2.GetResidentTask() {
 		jobNameList = append(jobNameList, job2jobStatus(*job))
 	}
-	for _, job := range jobConfigV2.ScheduledTask {
+	for _, job := range jobConfigV2.GetScheduledTask() {
 		jobNameList = append(jobNameList, job2jobStatus(*job))
 
 	}
@@ -48,7 +48,7 @@ func JobList() []JobStatus {
 }
 
 func getJobByJobId(uuId string) *Job {
-	for _, job := range jobConfigV2.ResidentTask {
+	for _, job := range jobConfigV2.GetResidentTask() {
 		if uuId == job.UUID {
 			return job
 		}
@@ -74,7 +74,7 @@ func JobStop(jobId string) error {
 }
 
 func StopAll() {
-	for _, item := range jobConfigV2.ResidentTask {
+	for _, item := range jobConfigV2.GetResidentTask() {
 		item.StopJob()
 		slog.Info(item.JobName + "退出")
 	}
@@ -89,7 +89,7 @@ func GetHttpConfig() BaseConfig {
 }
 
 func getTaskByTaskId(uuId string) *Job {
-	for _, job := range jobConfigV2.ScheduledTask {
+	for _, job := range jobConfigV2.GetScheduledTask() {
 		if uuId == job.UUID {
 			return job
 		}

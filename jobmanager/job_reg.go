@@ -35,19 +35,19 @@ func RegV2(fileData []byte) {
 		return
 	}
 
-	for _, job := range jobConfigV2.ResidentTask {
-		job.ConfigInit(1)
+	for _, job := range jobConfigV2.GetResidentTask() {
+		job.ConfigInit()
 		job.JobInit()
 
 		slog.Info(fmt.Sprintf("%v 加入常驻任务", job.UUID+job.JobName))
 	}
 
-	go scheduleV2(jobConfigV2.ScheduledTask)
+	go scheduleV2(jobConfigV2.GetScheduledTask())
 }
 
 func scheduleV2(jobList []*Job) {
 	for _, job := range jobList {
-		job.ConfigInit(2)
+		job.ConfigInit()
 		if job.Run == false {
 			continue
 		}
@@ -67,7 +67,7 @@ func scheduleV2(jobList []*Job) {
 	c.Run()
 }
 
-func (itself *Job) ConfigInit(taskType int) {
+func (itself *Job) ConfigInit() {
 	needFlush := false
 	defer func() {
 		if needFlush == true {
@@ -79,10 +79,6 @@ func (itself *Job) ConfigInit(taskType int) {
 	}()
 	if itself.UUID == "" {
 		itself.UUID = generateUUID()
-		needFlush = true
-	}
-	if itself.Type != taskType {
-		itself.Type = taskType
 		needFlush = true
 	}
 	itself.confLock = &sync.Mutex{}
@@ -294,11 +290,11 @@ func saveTask(job JobStatus) error {
 			Spec:    job.Spec,
 			Options: job.Options,
 		}
-		newJob.ConfigInit(job.Type)
+		newJob.ConfigInit()
 		jobConfigV2.TaskList = append(jobConfigV2.TaskList, &newJob)
 	} else {
 		if job.Type == 1 {
-			for _, jobItem := range jobConfigV2.ResidentTask {
+			for _, jobItem := range jobConfigV2.GetResidentTask() {
 				if jobItem.UUID == job.UUID {
 					if jobItem.Run == true {
 						return errors.New("任务处于开启状态不允许修改,如需修改请先关闭")
@@ -314,7 +310,7 @@ func saveTask(job JobStatus) error {
 				}
 			}
 		} else {
-			for _, jobItem := range jobConfigV2.ResidentTask {
+			for _, jobItem := range jobConfigV2.GetResidentTask() {
 				if jobItem.UUID == job.UUID {
 					if jobItem.Run == true {
 						return errors.New("任务处于开启状态不允许修改,如需修改请先关闭")
