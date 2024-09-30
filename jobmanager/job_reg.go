@@ -157,11 +157,13 @@ func (itself *Job) ForceRunJob() error {
 	return itself.JobInit()
 }
 
-func (itself *Job) StopJob() {
+func (itself *Job) StopJob(updateStatus ...bool) {
 	itself.confLock.Lock()
 	defer itself.confLock.Unlock()
 
-	itself.Run = false
+	if len(updateStatus) == 1 && updateStatus[0] == true {
+		itself.Run = false
+	}
 	if itself.cmd != nil && itself.cmd.Process != nil {
 		err := itself.cmd.Process.Kill()
 		if err != nil {

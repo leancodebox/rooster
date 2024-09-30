@@ -148,6 +148,7 @@ const model = ref(init)
 function add(type: any) {
   console.log(type)
   showModal.value = true
+  model.value = init
 }
 
 
@@ -179,8 +180,8 @@ function edit(row: any) {
 async function getData(show = 1) {
   let resp = await getJobList()
   data.value = resp.data.message
-  let wait4data4residentTask:any[] = [];
-  let wait4data4scheduledTask:any[] = [];
+  let wait4data4residentTask: any[] = [];
+  let wait4data4scheduledTask: any[] = [];
   for (let item in resp.data.message) {
     if (resp.data.message[item].type === 1) {
       wait4data4residentTask.push(resp.data.message[item])
@@ -275,8 +276,8 @@ async function getData(show = 1) {
       <n-form-item label="RunPath" path="RunPath">
         <n-input v-model:value="model.dir"></n-input>
       </n-form-item>
-      <n-form-item label="Open" path="Run">
-        <n-switch v-model:value="model.run"/>
+      <n-form-item label="Open" path="Run" >
+        <n-switch v-model:value="model.run" :disabled="true"/>
       </n-form-item>
       <n-form-item label="Params" path="Params">
         <n-select v-model:value="model.params"
@@ -296,6 +297,22 @@ async function getData(show = 1) {
             <n-icon :component="ArrowUpCircleOutline"/>
           </template>
         </n-input-number>
+      </n-form-item>
+      <n-form-item label="Log" path="Log">
+        <n-radio-group v-model:value="model.options.outputType" name="radiogroup1">
+          <n-space>
+            <n-radio :value="1">
+              标准
+            </n-radio>
+            <n-radio :value="2">
+              文件
+            </n-radio>
+          </n-space>
+        </n-radio-group>
+      </n-form-item>
+      <n-form-item label="LogDir" path="MaxFailures" v-show="model.options.outputType===2">
+        <n-input v-model:value="model.options.outputPath">
+        </n-input>
       </n-form-item>
     </n-form>
   </n-modal>

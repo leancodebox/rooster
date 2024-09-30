@@ -62,10 +62,8 @@ type BaseConfig struct {
 }
 
 type JobConfigV2 struct {
-	ResidentTask  []*Job     `json:"residentTask"`
-	ScheduledTask []*Job     `json:"scheduledTask"`
-	TaskList      []*Job     `json:"taskList"`
-	Config        BaseConfig `json:"config"`
+	TaskList []*Job     `json:"taskList"`
+	Config   BaseConfig `json:"config"`
 }
 
 func (itself *JobConfigV2) GetResidentTask() []*Job {

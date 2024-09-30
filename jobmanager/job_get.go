@@ -37,12 +37,8 @@ func job2jobStatus(job Job) JobStatus {
 
 func JobList() []JobStatus {
 	var jobNameList []JobStatus
-	for _, job := range jobConfigV2.GetResidentTask() {
+	for _, job := range jobConfigV2.TaskList {
 		jobNameList = append(jobNameList, job2jobStatus(*job))
-	}
-	for _, job := range jobConfigV2.GetScheduledTask() {
-		jobNameList = append(jobNameList, job2jobStatus(*job))
-
 	}
 	return jobNameList
 }
@@ -57,6 +53,7 @@ func getJobByJobId(uuId string) *Job {
 }
 
 func JobRun(jobId string) error {
+	defer flushConfig()
 	jh := getJobByJobId(jobId)
 	if jh == nil {
 		return errors.New("jobId不存在")
@@ -69,7 +66,8 @@ func JobStop(jobId string) error {
 	if jh == nil {
 		return errors.New("jobId不存在")
 	}
-	jh.StopJob()
+	jh.StopJob(true)
+	flushConfig()
 	return nil
 }
 
