@@ -71,7 +71,10 @@ func (itself *Job) ConfigInit(taskType int) {
 	needFlush := false
 	defer func() {
 		if needFlush == true {
-			// 需要刷新配置
+			err := flushConfig()
+			if err != nil {
+				slog.Error("flushConfig", "err", err)
+			}
 		}
 	}()
 	if itself.UUID == "" {
@@ -203,6 +206,32 @@ func RegByUserConfig() error {
 	return nil
 }
 
+func flushConfig() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		slog.Error("获取家目录失败", "err", err)
+		return err
+	}
+	slog.Info("当前系统的家目录", "homeDir", homeDir)
+	configDir := path.Join(homeDir, ".roosterTaskConfig")
+	if _, err = os.Stat(configDir); os.IsNotExist(err) {
+		err = os.Mkdir(configDir, os.ModePerm)
+		if err != nil {
+			return err
+		}
+	}
+	jobConfigPath := path.Join(configDir, "jobConfig.json")
+	data, err := json.MarshalIndent(jobConfigV2, "", "  ")
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(jobConfigPath, data, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 var c = cron.New()
 
 func (itself *Job) RunOnce() error {
@@ -242,11 +271,24 @@ func execAction(job Job) {
 	}
 }
 
-func saveTask(job Job, jobType int) {
+func saveTask(job Job) {
 	if job.UUID == "" {
 		job.UUID = generateUUID()
 	}
-	// add job
+	if job.Type == 1 {
+		for _, jobItem := range jobConfigV2.ResidentTask {
+			if jobItem.UUID == job.UUID {
+				// todo
+				return
+			}
+		}
+	} else {
+		for _, jobItem := range jobConfigV2.ResidentTask {
+			if jobItem.UUID == job.UUID {
+				// todo
+			}
+		}
+	}
 }
 
 func generateUUID() string {

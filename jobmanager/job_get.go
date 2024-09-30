@@ -2,6 +2,7 @@ package jobmanager
 
 import (
 	"errors"
+	"log/slog"
 	"time"
 )
 
@@ -75,6 +76,7 @@ func JobStop(jobId string) error {
 func StopAll() {
 	for _, item := range jobConfigV2.ResidentTask {
 		item.StopJob()
+		slog.Info(item.JobName + "退出")
 	}
 }
 
