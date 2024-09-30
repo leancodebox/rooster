@@ -293,37 +293,19 @@ func saveTask(job JobStatus) error {
 		newJob.ConfigInit()
 		jobConfigV2.TaskList = append(jobConfigV2.TaskList, &newJob)
 	} else {
-		if job.Type == 1 {
-			for _, jobItem := range jobConfigV2.GetResidentTask() {
-				if jobItem.UUID == job.UUID {
-					if jobItem.Run == true {
-						return errors.New("任务处于开启状态不允许修改,如需修改请先关闭")
-					}
-					jobItem.JobName = job.JobName
-					jobItem.Type = job.Type
-					jobItem.Run = job.Run
-					jobItem.BinPath = job.BinPath
-					jobItem.Params = job.Params
-					jobItem.Dir = job.Dir
-					jobItem.Spec = job.Spec
-					jobItem.Options = job.Options
+		for _, jobItem := range jobConfigV2.TaskList {
+			if jobItem.UUID == job.UUID {
+				if jobItem.Run == true {
+					return errors.New("任务处于开启状态不允许修改,如需修改请先关闭")
 				}
-			}
-		} else {
-			for _, jobItem := range jobConfigV2.GetResidentTask() {
-				if jobItem.UUID == job.UUID {
-					if jobItem.Run == true {
-						return errors.New("任务处于开启状态不允许修改,如需修改请先关闭")
-					}
-					jobItem.JobName = job.JobName
-					jobItem.Type = job.Type
-					jobItem.Run = job.Run
-					jobItem.BinPath = job.BinPath
-					jobItem.Params = job.Params
-					jobItem.Dir = job.Dir
-					jobItem.Spec = job.Spec
-					jobItem.Options = job.Options
-				}
+				jobItem.JobName = job.JobName
+				jobItem.Type = job.Type
+				jobItem.Run = job.Run
+				jobItem.BinPath = job.BinPath
+				jobItem.Params = job.Params
+				jobItem.Dir = job.Dir
+				jobItem.Spec = job.Spec
+				jobItem.Options = job.Options
 			}
 		}
 	}
