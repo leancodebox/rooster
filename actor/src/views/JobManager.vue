@@ -302,7 +302,7 @@ async function getData(show = 1) {
         <n-radio-group v-model:value="model.options.outputType" name="radiogroup1">
           <n-space>
             <n-radio :value="1">
-              标准
+              标准(默认)
             </n-radio>
             <n-radio :value="2">
               文件
