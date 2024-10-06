@@ -14,14 +14,13 @@ func HideWindows(cmd *exec.Cmd) {
 }
 
 // JobInit 初始化并执行
-func (itself *Job) JobInit() {
+func (itself *Job) JobInit() error {
 	itself.confLock.Lock()
 	defer itself.confLock.Unlock()
 	if itself.cmd == nil {
-		job := itself.jobConfig
-		cmd := exec.Command(job.BinPath, job.Params...)
+		cmd := exec.Command(itself.BinPath, itself.Params...)
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		cmd.Dir = job.Dir
+		cmd.Dir = itself.Dir
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
