@@ -2,11 +2,12 @@
   "taskList": [
     {
       "uuid": "",
-      "jobName": "ls",
+      "jobName": "date",
       "type": 1,
       "run": true,
-      "binPath": "ls",
+      "binPath": "cmd",
       "params": [
+        "/c", "date", "/t"
       ],
       "dir": "",
       "spec": "",
@@ -18,11 +19,12 @@
     },
     {
       "uuid": "",
-      "jobName": "ls",
+      "jobName": "date",
       "type": 2,
       "run": true,
-      "binPath": "ls",
+      "binPath": "cmd",
       "params": [
+        "/c", "date", "/t"
       ],
       "dir": "",
       "spec": "* * * * *",

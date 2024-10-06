@@ -25,8 +25,8 @@ const maxConsecutiveFailures = 3          // 连续失败次数的最大值
 type OutputType int
 
 const (
-	OutputTypeStd  OutputType = iota // 输出到标准输入输出
-	OutputTypeFile                   // 输出到文件
+	OutputTypeStd  OutputType = iota + 1 // 输出到标准输入输出
+	OutputTypeFile                       // 输出到文件
 )
 
 type RunOptions struct {

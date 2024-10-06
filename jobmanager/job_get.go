@@ -2,7 +2,6 @@ package jobmanager
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -90,7 +89,6 @@ func GetHttpConfig() BaseConfig {
 
 func getTaskByTaskId(uuId string) *Job {
 	for _, job := range jobConfigV2.GetScheduledTask() {
-		fmt.Println(job.UUID, uuId)
 		if uuId == job.UUID {
 			return job
 		}
@@ -103,12 +101,17 @@ var taskStatusLock sync.Mutex
 func OpenCloseTask(taskId string, run bool) error {
 	taskStatusLock.Lock()
 	defer taskStatusLock.Unlock()
-	defer flushConfig()
 
 	job := getTaskByTaskId(taskId)
 	if job == nil {
 		return errors.New("taskId不存在")
 	}
+
+	defer func() {
+		job.Run = run
+		flushConfig()
+	}()
+
 	if run {
 		if job.entityId != 0 {
 			return errors.New("任务已注册")
@@ -122,14 +125,12 @@ func OpenCloseTask(taskId string, run bool) error {
 			return err
 		}
 		job.entityId = entityId
-		job.Run = run
 	} else {
 		if job.entityId == 0 {
 			return nil
 		}
 		c.Remove(job.entityId)
 		job.entityId = 0
-		job.Run = run
 	}
 	return nil
 }
