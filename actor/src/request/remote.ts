@@ -43,3 +43,31 @@ export function runTask(taskId: any) {
         taskId: taskId
     })
 }
+
+export function saveTask(params: any) {
+    return instanceAxios.post("run-save", {
+        uuid: params.uuid,
+        jobName: params.jobName,
+        type: params.type,
+        run: params.run,
+        binPath: params.binPath,
+        params: params.params,
+        dir: params.dir,
+        spec: params.spec,
+        options: params.options,
+    })
+}
+
+
+export function removeTask(uuid: any) {
+    return instanceAxios.post("remove-task", {
+        uuid: uuid,
+    })
+}
+
+export function runOpenCloseTask(uuid: any, run: boolean) {
+    return instanceAxios.post("run-open-close-task", {
+        uuid: uuid,
+        run: run,
+    })
+}

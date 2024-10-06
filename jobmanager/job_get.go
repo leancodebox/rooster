@@ -2,7 +2,9 @@ package jobmanager
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 )
 
@@ -88,9 +90,46 @@ func GetHttpConfig() BaseConfig {
 
 func getTaskByTaskId(uuId string) *Job {
 	for _, job := range jobConfigV2.GetScheduledTask() {
+		fmt.Println(job.UUID, uuId)
 		if uuId == job.UUID {
 			return job
 		}
+	}
+	return nil
+}
+
+var taskStatusLock sync.Mutex
+
+func RunOpenCloseTask(taskId string, run bool) error {
+	taskStatusLock.Lock()
+	defer taskStatusLock.Unlock()
+	defer flushConfig()
+
+	job := getTaskByTaskId(taskId)
+	if job == nil {
+		return errors.New("taskId不存在")
+	}
+	if run {
+		if job.entityId != 0 {
+			return errors.New("任务已注册")
+		}
+		entityId, err := c.AddFunc(job.Spec, func(job *Job) func() {
+			return func() {
+				execAction(*job)
+			}
+		}(job))
+		if err != nil {
+			return err
+		}
+		job.entityId = entityId
+		job.Run = run
+	} else {
+		if job.entityId == 0 {
+			return nil
+		}
+		c.Remove(job.entityId)
+		job.entityId = 0
+		job.Run = run
 	}
 	return nil
 }
@@ -101,4 +140,77 @@ func RunTask(taskId string) error {
 		return errors.New("taskId不存在")
 	}
 	return task.RunOnce()
+}
+
+func SaveTask(job JobStatus) error {
+	needFlush := false
+	defer func() {
+		if needFlush == true {
+			err := flushConfig()
+			if err != nil {
+				slog.Error("flushConfig", "err", err)
+			}
+		}
+	}()
+	if job.UUID == "" {
+		job.UUID = generateUUID()
+		newJob := Job{
+			UUID:    job.UUID,
+			JobName: job.JobName,
+			Type:    job.Type,
+			Run:     job.Run,
+			BinPath: job.BinPath,
+			Params:  job.Params,
+			Dir:     job.Dir,
+			Spec:    job.Spec,
+			Options: job.Options,
+		}
+		newJob.ConfigInit()
+		jobConfigV2.TaskList = append(jobConfigV2.TaskList, &newJob)
+		needFlush = true
+	} else {
+		for _, jobItem := range jobConfigV2.TaskList {
+			if jobItem.UUID == job.UUID {
+				if jobItem.Run == true {
+					return errors.New("任务处于开启状态不允许修改,如需修改请先关闭")
+				}
+				if jobItem.Type != jobItem.Type {
+					return errors.New("任务类型不允许修改")
+				}
+				jobItem.JobName = job.JobName
+				jobItem.Run = job.Run
+				jobItem.BinPath = job.BinPath
+				jobItem.Params = job.Params
+				jobItem.Dir = job.Dir
+				jobItem.Spec = job.Spec
+				jobItem.Options = job.Options
+				needFlush = true
+			}
+		}
+	}
+	return nil
+}
+
+func RemoveTask(job JobStatus) error {
+	needFlush := false
+	defer func() {
+		if needFlush == true {
+			err := flushConfig()
+			if err != nil {
+				slog.Error("flushConfig", "err", err)
+			}
+		}
+	}()
+
+	for i, jobItem := range jobConfigV2.TaskList {
+		if jobItem.UUID == job.UUID {
+			if jobItem.Run == true {
+				return errors.New("任务处于开启状态不允许修改,如需修改请先关闭")
+			}
+			needFlush = true
+			jobConfigV2.TaskList = append(jobConfigV2.TaskList[0:i], jobConfigV2.TaskList[i+1:]...)
+			break
+		}
+	}
+	return nil
 }

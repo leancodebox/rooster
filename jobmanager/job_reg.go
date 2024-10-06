@@ -269,51 +269,6 @@ func execAction(job Job) {
 	}
 }
 
-func saveTask(job JobStatus) error {
-	needFlush := false
-	defer func() {
-		if needFlush == true {
-			err := flushConfig()
-			if err != nil {
-				slog.Error("flushConfig", "err", err)
-			}
-		}
-	}()
-	if job.UUID == "" {
-		job.UUID = generateUUID()
-		newJob := Job{
-			UUID:    job.UUID,
-			JobName: job.JobName,
-			Type:    job.Type,
-			Run:     job.Run,
-			BinPath: job.BinPath,
-			Params:  job.Params,
-			Dir:     job.Dir,
-			Spec:    job.Spec,
-			Options: job.Options,
-		}
-		newJob.ConfigInit()
-		jobConfigV2.TaskList = append(jobConfigV2.TaskList, &newJob)
-	} else {
-		for _, jobItem := range jobConfigV2.TaskList {
-			if jobItem.UUID == job.UUID {
-				if jobItem.Run == true {
-					return errors.New("任务处于开启状态不允许修改,如需修改请先关闭")
-				}
-				jobItem.JobName = job.JobName
-				jobItem.Type = job.Type
-				jobItem.Run = job.Run
-				jobItem.BinPath = job.BinPath
-				jobItem.Params = job.Params
-				jobItem.Dir = job.Dir
-				jobItem.Spec = job.Spec
-				jobItem.Options = job.Options
-			}
-		}
-	}
-	return nil
-}
-
 func generateUUID() string {
 	var UUID uuid.UUID
 	UUID, err := uuid.NewRandom()

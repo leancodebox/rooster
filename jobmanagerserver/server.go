@@ -79,14 +79,57 @@ func ServeRun() *http.Server {
 		})
 	})
 
+	type RunOpenCloseTask struct {
+		UUID string `json:"uuid"`
+		Run  bool   `json:"run"`
+	}
+
+	api.POST("/run-open-close-task", func(c *gin.Context) {
+		var params RunOpenCloseTask
+		_ = c.ShouldBind(&params)
+		err := jobmanager.RunOpenCloseTask(params.UUID, params.Run)
+		msg := "success"
+		if err != nil {
+			msg = err.Error()
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message": msg,
+		})
+	})
+
 	type TaskActionReq struct {
 		TaskId string `json:"taskId"`
 	}
-
 	api.POST("/run-task", func(c *gin.Context) {
 		var params TaskActionReq
 		_ = c.ShouldBind(&params)
 		err := jobmanager.RunTask(params.TaskId)
+		msg := "success"
+		if err != nil {
+			msg = err.Error()
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message": msg,
+		})
+	})
+
+	api.POST("/run-save", func(c *gin.Context) {
+		var params jobmanager.JobStatus
+		_ = c.ShouldBind(&params)
+		err := jobmanager.SaveTask(params)
+		msg := "success"
+		if err != nil {
+			msg = err.Error()
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message": msg,
+		})
+	})
+
+	api.POST("/remove-task", func(c *gin.Context) {
+		var params jobmanager.JobStatus
+		_ = c.ShouldBind(&params)
+		err := jobmanager.RemoveTask(params)
 		msg := "success"
 		if err != nil {
 			msg = err.Error()

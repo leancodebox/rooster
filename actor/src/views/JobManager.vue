@@ -19,7 +19,7 @@ import {
   useMessage
 } from "naive-ui"
 import {h, onMounted, ref} from "vue";
-import {getJobList, runJob, runTask, stopJob} from "@/request/remote"
+import {getJobList, removeTask, runJob, runOpenCloseTask, runTask, saveTask, stopJob} from "@/request/remote"
 import {ArrowDownCircleOutline, ArrowUpCircleOutline} from '@vicons/ionicons5'
 
 const message = useMessage()
@@ -50,6 +50,18 @@ const columns = [
   },
   {
     title: 'Opt', key: 'opt', ellipsis: true, render(row: any) {
+      let rm =h(
+          NButton,
+          {
+            // strong: true,
+            // tertiary: true,
+            type: "error",
+            size: "small",
+            ghost: true,
+            onClick: () => removeTask(row.uuid).then(r => getData(0))
+          },
+          {default: () => "删除"}
+      )
       let jobButton = [h(
           NButton,
           {
@@ -81,6 +93,20 @@ const columns = [
             {
               // strong: true,
               // tertiary: true,
+              type: row.run?"error":"warning",
+              size: "small",
+              ghost: true,
+              onClick: () => runOpenCloseTask(row.uuid,!row.run).then(r => {
+                message.success(r.data.message)
+                return getData(0)
+              })
+            },
+            {default: () => row.run?"停止":"启动"}
+        ),
+        h(NButton,
+            {
+              // strong: true,
+              // tertiary: true,
               type: "primary",
               size: "small",
               ghost: true,
@@ -104,7 +130,9 @@ const columns = [
           {default: () => "编辑"}
       )
       jobButton.push(editButton)
+      jobButton.push(rm)
       taskButton.push(editButton)
+      taskButton.push(rm)
       if (row.type === 1) {
         return h(NSpace,
             {},
@@ -128,6 +156,7 @@ onMounted(() => {
 const showModal = ref(false);
 const rules = {}
 const init = {
+  uuid:"",
   jobName: "",
   type: 1,
   spec: "* * * * *",
@@ -157,12 +186,15 @@ function onNegativeClick() {
   showModal.value = false
 }
 
-function onPositiveClick() {
-
+async function onPositiveClick() {
+  let res = await saveTask(model.value)
+  message.info(res.data.message)
+  await getData(0)
 }
 
 function edit(row: any) {
   model.value = {
+    uuid: row.uuid,
     jobName: row.jobName,
     type: row.type,
     spec: row.spec,
@@ -276,7 +308,7 @@ async function getData(show = 1) {
       <n-form-item label="RunPath" path="RunPath">
         <n-input v-model:value="model.dir"></n-input>
       </n-form-item>
-      <n-form-item label="Open" path="Run" >
+      <n-form-item label="Open" path="Run">
         <n-switch v-model:value="model.run" :disabled="true"/>
       </n-form-item>
       <n-form-item label="Params" path="Params">
@@ -299,7 +331,7 @@ async function getData(show = 1) {
         </n-input-number>
       </n-form-item>
       <n-form-item label="Log" path="Log">
-        <n-radio-group v-model:value="model.options.outputType" name="radiogroup1">
+        <n-radio-group v-model:value="model.options.outputType" name="radioGroup1">
           <n-space>
             <n-radio :value="1">
               标准(默认)
