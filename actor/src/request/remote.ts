@@ -26,14 +26,14 @@ export function getJobList() {
 
 
 export function runJob(jobId: any) {
-    return instanceAxios.post("run-job", {
+    return instanceAxios.post("run-job-resident-task", {
         jobId: jobId
     })
 }
 
 
 export function stopJob(jobId: any) {
-    return instanceAxios.post("stop-job", {
+    return instanceAxios.post("stop-job-resident-task", {
         jobId: jobId
     })
 }
@@ -45,7 +45,7 @@ export function runTask(taskId: any) {
 }
 
 export function saveTask(params: any) {
-    return instanceAxios.post("run-save", {
+    return instanceAxios.post("save-task", {
         uuid: params.uuid,
         jobName: params.jobName,
         type: params.type,
@@ -66,7 +66,7 @@ export function removeTask(uuid: any) {
 }
 
 export function runOpenCloseTask(uuid: any, run: boolean) {
-    return instanceAxios.post("run-open-close-task", {
+    return instanceAxios.post("open-close-task", {
         uuid: uuid,
         run: run,
     })

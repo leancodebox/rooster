@@ -54,7 +54,7 @@ func getJobByJobId(uuId string) *Job {
 	return nil
 }
 
-func JobRun(jobId string) error {
+func JobRunResidentTask(jobId string) error {
 	defer flushConfig()
 	jh := getJobByJobId(jobId)
 	if jh == nil {
@@ -63,7 +63,7 @@ func JobRun(jobId string) error {
 	return jh.ForceRunJob()
 }
 
-func JobStop(jobId string) error {
+func JobStopResidentTask(jobId string) error {
 	jh := getJobByJobId(jobId)
 	if jh == nil {
 		return errors.New("jobId不存在")
@@ -100,7 +100,7 @@ func getTaskByTaskId(uuId string) *Job {
 
 var taskStatusLock sync.Mutex
 
-func RunOpenCloseTask(taskId string, run bool) error {
+func OpenCloseTask(taskId string, run bool) error {
 	taskStatusLock.Lock()
 	defer taskStatusLock.Unlock()
 	defer flushConfig()

@@ -55,10 +55,10 @@ func ServeRun() *http.Server {
 	type JobUpdateReq struct {
 		JobId string `json:"jobId"`
 	}
-	api.POST("/run-job", func(c *gin.Context) {
+	api.POST("/run-job-resident-task", func(c *gin.Context) {
 		var params JobUpdateReq
 		_ = c.ShouldBind(&params)
-		err := jobmanager.JobRun(params.JobId)
+		err := jobmanager.JobRunResidentTask(params.JobId)
 		msg := "success"
 		if err != nil {
 			msg = err.Error()
@@ -67,10 +67,10 @@ func ServeRun() *http.Server {
 			"message": msg,
 		})
 	})
-	api.POST("/stop-job", func(c *gin.Context) {
+	api.POST("/stop-job-resident-task", func(c *gin.Context) {
 		var params JobUpdateReq
 		_ = c.ShouldBind(&params)
-		err := jobmanager.JobStop(params.JobId)
+		err := jobmanager.JobStopResidentTask(params.JobId)
 		msg := "success"
 		if err != nil {
 			msg = err.Error()
@@ -85,10 +85,10 @@ func ServeRun() *http.Server {
 		Run  bool   `json:"run"`
 	}
 
-	api.POST("/run-open-close-task", func(c *gin.Context) {
+	api.POST("/open-close-task", func(c *gin.Context) {
 		var params RunOpenCloseTask
 		_ = c.ShouldBind(&params)
-		err := jobmanager.RunOpenCloseTask(params.UUID, params.Run)
+		err := jobmanager.OpenCloseTask(params.UUID, params.Run)
 		msg := "success"
 		if err != nil {
 			msg = err.Error()
@@ -114,7 +114,7 @@ func ServeRun() *http.Server {
 		})
 	})
 
-	api.POST("/run-save", func(c *gin.Context) {
+	api.POST("/save-task", func(c *gin.Context) {
 		var params jobmanager.JobStatus
 		_ = c.ShouldBind(&params)
 		err := jobmanager.SaveTask(params)
