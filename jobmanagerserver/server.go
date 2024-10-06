@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path"
+	"strings"
 	"time"
 )
 
@@ -139,6 +140,14 @@ func ServeRun() *http.Server {
 		})
 	})
 
+	api.GET("/run-info", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "success",
+			"start":   jobmanager.GetStartTime().Format("2006-01-02 15:04:05"),
+			"runTime": formatDuration(jobmanager.GetRunTime()),
+		})
+	})
+
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("listen: %s\n", err)
@@ -205,4 +214,45 @@ func IpLimit(c *gin.Context) {
 		return
 	}
 	c.Next()
+}
+
+func formatDuration(d time.Duration) string {
+	var parts []string
+
+	years := float64(d.Hours() / (24 * 365.25)) // 估算每年为365.25天（考虑闰年）
+	if years >= 1 {
+		parts = append(parts, fmt.Sprintf("%vy", years))
+		d -= time.Duration(years*365.25*24) * time.Hour
+	}
+
+	months := int64(d.Hours() / (24 * 30)) // 估算每月为30天
+	if months > 0 {
+		parts = append(parts, fmt.Sprintf("%dm", months))
+		d -= time.Duration(months*30*24) * time.Hour
+	}
+
+	days := int64(d.Hours() / 24)
+	if days > 0 {
+		parts = append(parts, fmt.Sprintf("%dd", days))
+		d -= time.Duration(days*24) * time.Hour
+	}
+
+	hours := int64(d.Hours())
+	if hours > 0 {
+		parts = append(parts, fmt.Sprintf("%dh", hours))
+		d -= time.Duration(hours) * time.Hour
+	}
+
+	minutes := int64(d.Minutes())
+	if minutes > 0 {
+		parts = append(parts, fmt.Sprintf("%dm", minutes))
+		d -= time.Duration(minutes) * time.Minute
+	}
+
+	seconds := int64(d.Seconds())
+	if seconds > 0 {
+		parts = append(parts, fmt.Sprintf("%ds", seconds))
+	}
+
+	return strings.Join(parts, " ")
 }

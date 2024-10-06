@@ -67,7 +67,7 @@ type JobConfigV2 struct {
 }
 
 func (itself *JobConfigV2) GetResidentTask() []*Job {
-	r := []*Job{}
+	var r []*Job
 	for _, item := range itself.TaskList {
 		if item.Type == 1 {
 			r = append(r, item)
@@ -76,7 +76,7 @@ func (itself *JobConfigV2) GetResidentTask() []*Job {
 	return r
 }
 func (itself *JobConfigV2) GetScheduledTask() []*Job {
-	r := []*Job{}
+	var r []*Job
 	for _, item := range itself.TaskList {
 		if item.Type == 2 {
 			r = append(r, item)

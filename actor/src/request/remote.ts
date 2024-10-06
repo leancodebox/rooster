@@ -71,3 +71,9 @@ export function runOpenCloseTask(uuid: any, run: boolean) {
         run: run,
     })
 }
+
+
+export function runInfo() {
+    return instanceAxios.get("run-info", {
+    })
+}

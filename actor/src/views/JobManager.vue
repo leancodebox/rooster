@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   NButton,
+  NCard,
   NDataTable,
   NForm,
   NFormItem,
@@ -18,8 +19,8 @@ import {
   NTag,
   useMessage
 } from "naive-ui"
-import {h, onMounted, ref} from "vue";
-import {getJobList, removeTask, runJob, runOpenCloseTask, runTask, saveTask, stopJob} from "@/request/remote"
+import {h, onMounted, onUnmounted, ref} from "vue";
+import {getJobList, removeTask, runInfo, runJob, runOpenCloseTask, runTask, saveTask, stopJob} from "@/request/remote"
 import {ArrowDownCircleOutline, ArrowUpCircleOutline} from '@vicons/ionicons5'
 
 const message = useMessage()
@@ -50,7 +51,7 @@ const columns = [
   },
   {
     title: 'Opt', key: 'opt', ellipsis: true, render(row: any) {
-      let rm =h(
+      let rm = h(
           NButton,
           {
             // strong: true,
@@ -93,15 +94,15 @@ const columns = [
             {
               // strong: true,
               // tertiary: true,
-              type: row.run?"error":"warning",
+              type: row.run ? "error" : "warning",
               size: "small",
               ghost: true,
-              onClick: () => runOpenCloseTask(row.uuid,!row.run).then(r => {
+              onClick: () => runOpenCloseTask(row.uuid, !row.run).then(r => {
                 message.success(r.data.message)
                 return getData(0)
               })
             },
-            {default: () => row.run?"停止":"启动"}
+            {default: () => row.run ? "停止" : "启动"}
         ),
         h(NButton,
             {
@@ -156,7 +157,7 @@ onMounted(() => {
 const showModal = ref(false);
 const rules = {}
 const init = {
-  uuid:"",
+  uuid: "",
   jobName: "",
   type: 1,
   spec: "* * * * *",
@@ -227,6 +228,27 @@ async function getData(show = 1) {
     message.success("刷新成功")
   }
 }
+
+let appRunTime = ref({
+  start: "",
+  runTime: "",
+})
+let id = setInterval(() => {})
+
+onMounted(() => {
+  id = setInterval(() => {
+    runInfo().then(r => {
+      appRunTime.value = {
+        runTime: r.data.runTime,
+        start: r.data.start,
+      }
+    }).catch(r => {
+    })
+  }, 1000)
+})
+onUnmounted(() => {
+  clearInterval(id)
+})
 </script>
 <template>
   <n-tabs
@@ -259,6 +281,11 @@ async function getData(show = 1) {
             :bordered="true"
         />
       </n-space>
+    </n-tab-pane>
+    <n-tab-pane name="关于">
+      <n-card>
+        TaskManager启动于{{ appRunTime.start }},目前已经运行<span style="color: #3f7fe0;">{{ appRunTime.runTime }}</span>
+      </n-card>
     </n-tab-pane>
   </n-tabs>
 

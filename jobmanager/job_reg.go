@@ -174,6 +174,20 @@ func (itself *Job) StopJob(updateStatus ...bool) {
 	}
 }
 
+var start time.Time
+
+func init() {
+	start = time.Now()
+}
+
+func GetRunTime() time.Duration {
+	return time.Now().Sub(start)
+}
+
+func GetStartTime() time.Time {
+	return start
+}
+
 func RegByUserConfig() error {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
