@@ -19,6 +19,15 @@ import (
 
 var startTime = time.Now()
 
+var signClose = false
+
+func Closed() bool {
+	return signClose
+}
+func StartClose() {
+	signClose = true
+}
+
 type RunStatus int
 
 const (
@@ -132,7 +141,7 @@ func (itself *Job) jobGuard() {
 			consecutiveFailures = 1
 		}
 
-		if !itself.Run {
+		if !itself.Run || Closed() {
 			msg := itself.JobName + " 溜了溜了"
 			slog.Info(msg)
 			roosterSay.Send(msg)
@@ -160,6 +169,7 @@ func (itself *Job) ForceRunJob() error {
 func (itself *Job) StopJob(updateStatus ...bool) {
 	itself.confLock.Lock()
 	defer itself.confLock.Unlock()
+	StartClose()
 
 	if len(updateStatus) == 1 && updateStatus[0] == true {
 		itself.Run = false
