@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/leancodebox/rooster/resource"
 	"github.com/leancodebox/rooster/roosterSay"
 	"github.com/robfig/cron/v3"
 )
@@ -198,27 +197,28 @@ func GetStartTime() time.Time {
 	return start
 }
 
-func RegByUserConfig() error {
+func getConfigPath() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		slog.Error("获取家目录失败", "err", err)
-		return err
+		homeDir = "tmp"
 	}
-	slog.Info("当前系统的家目录", "homeDir", homeDir)
 	configDir := path.Join(homeDir, ".roosterTaskConfig")
+	slog.Info("当前目录", "homeDir", homeDir)
 	if _, err = os.Stat(configDir); os.IsNotExist(err) {
 		err = os.Mkdir(configDir, os.ModePerm)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 	jobConfigPath := path.Join(configDir, "jobConfig.json")
-	if _, err = os.Stat(jobConfigPath); os.IsNotExist(err) {
-		err = os.WriteFile(jobConfigPath, resource.GetJobConfigDefault(), 0644)
-		if err != nil {
-			slog.Error("无法写入文件", "err", err)
-			return err
-		}
+	return jobConfigPath, nil
+}
+
+func RegByUserConfig() error {
+	jobConfigPath, err := getConfigPath()
+	if err != nil {
+		return err
 	}
 	fileData, err := os.ReadFile(jobConfigPath)
 	if err != nil {
@@ -229,20 +229,10 @@ func RegByUserConfig() error {
 }
 
 func flushConfig() error {
-	homeDir, err := os.UserHomeDir()
+	jobConfigPath, err := getConfigPath()
 	if err != nil {
-		slog.Error("获取家目录失败", "err", err)
 		return err
 	}
-	slog.Info("当前系统的家目录", "homeDir", homeDir)
-	configDir := path.Join(homeDir, ".roosterTaskConfig")
-	if _, err = os.Stat(configDir); os.IsNotExist(err) {
-		err = os.Mkdir(configDir, os.ModePerm)
-		if err != nil {
-			return err
-		}
-	}
-	jobConfigPath := path.Join(configDir, "jobConfig.json")
 	data, err := json.MarshalIndent(jobConfigV2, "", "  ")
 	if err != nil {
 		return err
