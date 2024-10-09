@@ -156,29 +156,34 @@ onMounted(() => {
 
 const showModal = ref(false);
 const rules = {}
-const init = {
-  uuid: "",
-  jobName: "",
-  type: 1,
-  spec: "* * * * *",
-  binPath: "",
-  dir: "",
-  run: true,
-  params: [],
-  maxFailures: 3,
-  options: {
-    maxFailures: 5,
-    outputPath: "/tmp",
-    outputType: 1
-  },
-  edit: false,
+
+function getInitData(type: any) {
+  return {
+    uuid: "",
+    jobName: "",
+    type: type,
+    spec: "* * * * *",
+    binPath: "",
+    dir: "",
+    run: false,
+    params: [],
+    maxFailures: 3,
+    options: {
+      maxFailures: 5,
+      outputPath: "/tmp",
+      outputType: 1
+    },
+    edit: false,
+  }
 }
-const model = ref(init)
+
+const model = ref(getInitData(1))
 
 function add(type: any) {
   console.log(type)
+  model.value = getInitData(type)
   showModal.value = true
-  model.value = init
+
 }
 
 
@@ -233,7 +238,8 @@ let appRunTime = ref({
   start: "",
   runTime: "",
 })
-let id = setInterval(() => {})
+let id = setInterval(() => {
+})
 
 onMounted(() => {
   id = setInterval(() => {
@@ -260,7 +266,7 @@ onUnmounted(() => {
       <n-space vertical>
         <n-space>
           <n-button @click="getData(1)">刷新列表</n-button>
-          <n-button @click="add(2)">新增定时任务</n-button>
+          <n-button @click="add(1)">新增常驻任务</n-button>
         </n-space>
         <n-data-table
             :columns="columns"
@@ -284,7 +290,9 @@ onUnmounted(() => {
     </n-tab-pane>
     <n-tab-pane name="关于">
       <n-card>
-        TaskManager启动于{{ appRunTime.start }},目前已经运行<span style="color: #3f7fe0;">{{ appRunTime.runTime }}</span>
+        TaskManager启动于{{ appRunTime.start }},目前已经运行<span style="color: #3f7fe0;">{{
+          appRunTime.runTime
+        }}</span>
       </n-card>
     </n-tab-pane>
   </n-tabs>
