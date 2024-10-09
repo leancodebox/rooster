@@ -203,7 +203,6 @@ func getConfigPath() (string, error) {
 		slog.Error("获取家目录失败", "err", err)
 		homeDir = "tmp"
 	}
-	homeDir = "tmp"
 	configDir := path.Join(homeDir, ".roosterTaskConfig")
 	slog.Info("当前目录", "homeDir", homeDir)
 	if _, err = os.Stat(configDir); os.IsNotExist(err) {
