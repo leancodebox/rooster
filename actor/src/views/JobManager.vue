@@ -206,7 +206,7 @@ function edit(row: any) {
     spec: row.spec,
     binPath: row.binPath,
     dir: row.dir,
-    run: true,
+    run: row.run,
     params: row.params,
     maxFailures: 3,
     options: row.options,
