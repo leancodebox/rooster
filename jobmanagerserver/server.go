@@ -208,8 +208,8 @@ func GinCors(context *gin.Context) {
 func IpLimit(c *gin.Context) {
 	clientIP := c.ClientIP()
 	ip, _ := serverinfo.GetLocalIp()
-	if len(ip) != 0 && clientIP != ip && clientIP != "::1" {
-		slog.Error("clientIp:"+clientIP, " localIp:"+ip)
+	if len(ip) != 0 && clientIP != ip && clientIP != "::1" && clientIP != "127.0.0.1" {
+		slog.Error("ipLimit", "clientIp", clientIP, "localIp", ip)
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 		return
 	}
