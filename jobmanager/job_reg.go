@@ -99,6 +99,9 @@ func (itself *Job) GetJobName() string {
 
 func (itself *Job) jobGuard() {
 	defer func() {
+		if err := recover(); err != nil {
+			slog.Error("jobGuard", "err", err)
+		}
 		itself.cmd = nil
 	}()
 	if itself.Options.OutputType == OutputTypeFile && itself.Options.OutputPath != "" {
