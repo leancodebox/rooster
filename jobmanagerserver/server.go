@@ -13,7 +13,6 @@ import (
 	"log/slog"
 	"net/http"
 	"path"
-	"strings"
 	"time"
 )
 
@@ -217,42 +216,9 @@ func IpLimit(c *gin.Context) {
 }
 
 func formatDuration(d time.Duration) string {
-	var parts []string
-
-	years := float64(d.Hours() / (24 * 365.25)) // 估算每年为365.25天（考虑闰年）
-	if years >= 1 {
-		parts = append(parts, fmt.Sprintf("%vy", years))
-		d -= time.Duration(years*365.25*24) * time.Hour
-	}
-
-	months := int64(d.Hours() / (24 * 30)) // 估算每月为30天
-	if months > 0 {
-		parts = append(parts, fmt.Sprintf("%dm", months))
-		d -= time.Duration(months*30*24) * time.Hour
-	}
-
-	days := int64(d.Hours() / 24)
-	if days > 0 {
-		parts = append(parts, fmt.Sprintf("%dd", days))
-		d -= time.Duration(days*24) * time.Hour
-	}
-
-	hours := int64(d.Hours())
-	if hours > 0 {
-		parts = append(parts, fmt.Sprintf("%dh", hours))
-		d -= time.Duration(hours) * time.Hour
-	}
-
-	minutes := int64(d.Minutes())
-	if minutes > 0 {
-		parts = append(parts, fmt.Sprintf("%dm", minutes))
-		d -= time.Duration(minutes) * time.Minute
-	}
-
-	seconds := int64(d.Seconds())
-	if seconds > 0 {
-		parts = append(parts, fmt.Sprintf("%ds", seconds))
-	}
-
-	return strings.Join(parts, " ")
+	day := int64(d.Hours() / 24)
+	hour := int64((d % (time.Hour * 24)).Hours())
+	minute := int64((d % time.Hour).Minutes())
+	seconds := int64((d % time.Minute).Seconds())
+	return fmt.Sprintf("%02d天%02d时%02d分%02d秒", day, hour, minute, seconds)
 }
