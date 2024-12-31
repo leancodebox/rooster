@@ -58,3 +58,12 @@ go install github.com/leancodebox/rooster-cli@latest
 | `scheduledTask.[]options.outputType` |  `int`   |             输出模式 0 标准输出 1 文件输出             |
 | `scheduledTask.[]options.outputPath` | `string` |                    输出路径                    |
 
+
+# todo
+
+解决代码中配置/配置读取/配置使用/配置写入和程序运行之间的耦合点。
+
+程序守护进进程与外部的配置交互节藕。
+
+程序通知外部，外部发送信号给守护进程
+
