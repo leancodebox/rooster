@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// JobStatus job运行状态
 type JobStatus struct {
 	UUID    string     `json:"uuid"`
 	JobName string     `json:"jobName"`
@@ -21,6 +22,7 @@ type JobStatus struct {
 	Status RunStatus `json:"status"`
 }
 
+// 类型转化
 func job2jobStatus(job Job) JobStatus {
 	return JobStatus{
 		UUID:    job.UUID,
