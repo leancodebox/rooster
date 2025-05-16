@@ -54,6 +54,10 @@ type Job struct {
 	runOnceLock *sync.Mutex
 }
 
+func (itself *Job) IsRun() bool {
+	return itself.Run
+}
+
 type BaseConfig struct {
 	Dashboard struct {
 		Port int `json:"port"`

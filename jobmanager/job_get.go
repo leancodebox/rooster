@@ -69,8 +69,8 @@ func JobStopResidentTask(jobId string) error {
 	if jh == nil {
 		return errors.New("jobId不存在")
 	}
+	defer flushConfig()
 	jh.StopJob(true)
-	flushConfig()
 	return nil
 }
 
@@ -109,12 +109,10 @@ func OpenCloseTask(taskId string, run bool) error {
 		return errors.New("taskId不存在")
 	}
 
-	defer func() {
-		job.Run = run
-		flushConfig()
-	}()
+	defer flushConfig()
+	job.Run = run
 
-	if run {
+	if job.Run {
 		if job.entityId != 0 {
 			return errors.New("任务已注册")
 		}

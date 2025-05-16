@@ -1,6 +1,7 @@
 package jobmanager
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/leancodebox/rooster/roosterSay"
 	"github.com/robfig/cron/v3"
 )
@@ -178,10 +178,32 @@ func (itself *Job) StopJob(updateStatus ...bool) {
 		itself.Run = false
 	}
 	if itself.cmd != nil && itself.cmd.Process != nil {
-		err := itself.cmd.Process.Kill()
+		// 先发送终止信号
+		err := itself.cmd.Process.Signal(os.Interrupt)
 		if err != nil {
-			slog.Info(err.Error())
-			return
+			slog.Info("发送终止信号失败:", "err", err)
+		}
+
+		// 等待5秒让进程优雅退出
+		done := make(chan error, 1)
+		go func() {
+			done <- itself.cmd.Wait()
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		select {
+		case <-ctx.Done():
+			// 超时后强制终止
+			err = itself.cmd.Process.Kill()
+			if err != nil {
+				slog.Info("强制终止进程失败:", "err", err)
+				return
+			}
+		case err := <-done:
+			if err != nil {
+				slog.Info("进程退出错误:", "err", err)
+			}
 		}
 		itself.cmd = nil
 	}
@@ -288,11 +310,20 @@ func execAction(job Job) {
 	}
 }
 
-func generateUUID() string {
-	var UUID uuid.UUID
-	UUID, err := uuid.NewRandom()
-	if err != nil {
-		return time.Now().Format(time.UnixDate)
+// JobInit 初始化并执行
+func (itself *Job) JobInit() error {
+	itself.confLock.Lock()
+	defer itself.confLock.Unlock()
+	if itself.cmd == nil {
+		cmd := exec.Command(itself.BinPath, itself.Params...)
+		HideWindows(cmd)
+		cmd.Dir = itself.Dir
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		itself.cmd = cmd
+		go itself.jobGuard()
+		return nil
 	}
-	return UUID.String()
+	return errors.New("程序运行中")
 }
