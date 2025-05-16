@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// JobStatus job运行状态
-type JobStatus struct {
+// JobStatusShow job运行状态
+type JobStatusShow struct {
 	UUID    string     `json:"uuid"`
 	JobName string     `json:"jobName"`
 	Type    int        `json:"type"` //运行模式 0 常驻 1 定时
@@ -23,8 +23,8 @@ type JobStatus struct {
 }
 
 // 类型转化
-func job2jobStatus(job Job) JobStatus {
-	return JobStatus{
+func job2jobStatus(job Job) JobStatusShow {
+	return JobStatusShow{
 		UUID:    job.UUID,
 		JobName: job.JobName,
 		Type:    job.Type,
@@ -38,8 +38,8 @@ func job2jobStatus(job Job) JobStatus {
 	}
 }
 
-func JobList() []JobStatus {
-	var jobNameList []JobStatus
+func JobList() []JobStatusShow {
+	var jobNameList []JobStatusShow
 	for _, job := range jobConfigV2.TaskList {
 		jobNameList = append(jobNameList, job2jobStatus(*job))
 	}
@@ -75,6 +75,7 @@ func JobStopResidentTask(jobId string) error {
 }
 
 func StopAll() {
+	StartClose()
 	for _, item := range jobConfigV2.GetResidentTask() {
 		item.StopJob()
 		slog.Info(item.JobName + "退出")
@@ -143,7 +144,7 @@ func RunTask(taskId string) error {
 	return task.RunOnce()
 }
 
-func SaveTask(job JobStatus) error {
+func SaveTask(job JobStatusShow) error {
 	needFlush := false
 	defer func() {
 		if needFlush == true {
@@ -192,7 +193,7 @@ func SaveTask(job JobStatus) error {
 	return nil
 }
 
-func RemoveTask(job JobStatus) error {
+func RemoveTask(job JobStatusShow) error {
 	needFlush := false
 	defer func() {
 		if needFlush == true {

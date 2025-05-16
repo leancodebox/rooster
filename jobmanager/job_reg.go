@@ -172,7 +172,6 @@ func (itself *Job) ForceRunJob() error {
 func (itself *Job) StopJob(updateStatus ...bool) {
 	itself.confLock.Lock()
 	defer itself.confLock.Unlock()
-	StartClose()
 
 	if len(updateStatus) == 1 && updateStatus[0] == true {
 		itself.Run = false

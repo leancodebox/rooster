@@ -114,7 +114,7 @@ func ServeRun() *http.Server {
 	})
 
 	api.POST("/save-task", func(c *gin.Context) {
-		var params jobmanager.JobStatus
+		var params jobmanager.JobStatusShow
 		_ = c.ShouldBind(&params)
 		err := jobmanager.SaveTask(params)
 		msg := "success"
@@ -127,7 +127,7 @@ func ServeRun() *http.Server {
 	})
 
 	api.POST("/remove-task", func(c *gin.Context) {
-		var params jobmanager.JobStatus
+		var params jobmanager.JobStatusShow
 		_ = c.ShouldBind(&params)
 		err := jobmanager.RemoveTask(params)
 		msg := "success"
