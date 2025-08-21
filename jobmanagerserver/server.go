@@ -4,16 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/leancodebox/rooster/actor"
-	"github.com/leancodebox/rooster/jobmanager"
-	"github.com/leancodebox/rooster/jobmanagerserver/serverinfo"
 	"io/fs"
 	"log"
 	"log/slog"
 	"net/http"
 	"path"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/leancodebox/rooster/actor"
+	"github.com/leancodebox/rooster/jobmanager"
+	"github.com/leancodebox/rooster/jobmanagerserver/serverinfo"
 )
 
 var srv *http.Server
@@ -31,7 +32,7 @@ func ServeRun() *http.Server {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	srv = &http.Server{
-		Addr:           fmt.Sprintf(":%v", port),
+		Addr:           fmt.Sprintf("127.0.0.1:%v", port),
 		Handler:        r,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
