@@ -284,6 +284,7 @@ func (itself *Job) RunOnce() error {
 
 func execAction(job Job) {
 	cmd := exec.Command(job.BinPath, job.Params...)
+	cmd.Env = os.Environ()
 	cmd.Dir = job.Dir
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -316,6 +317,7 @@ func (itself *Job) JobInit() error {
 	if itself.cmd == nil {
 		cmd := exec.Command(itself.BinPath, itself.Params...)
 		HideWindows(cmd)
+		cmd.Env = os.Environ()
 		cmd.Dir = itself.Dir
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
