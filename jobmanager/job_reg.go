@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -283,7 +284,19 @@ func (itself *Job) RunOnce() error {
 }
 
 func execAction(job Job) {
-	cmd := exec.Command(job.BinPath, job.Params...)
+	var shell string
+	var args []string
+	if runtime.GOOS == "windows" {
+		shell = "cmd.exe"
+		args = append([]string{"/C", job.BinPath}, job.Params...)
+	} else {
+		shell = os.Getenv("SHELL")
+		if shell == "" {
+			shell = "/bin/bash"
+		}
+		args = append([]string{"-c", job.BinPath}, job.Params...)
+	}
+	cmd := exec.Command(shell, args...)
 	cmd.Env = os.Environ()
 	cmd.Dir = job.Dir
 	cmd.Stdin = os.Stdin
@@ -315,9 +328,20 @@ func (itself *Job) JobInit() error {
 	itself.confLock.Lock()
 	defer itself.confLock.Unlock()
 	if itself.cmd == nil {
-		cmd := exec.Command(itself.BinPath, itself.Params...)
+		var shell string
+		var args []string
+		if runtime.GOOS == "windows" {
+			shell = "cmd.exe"
+			args = append([]string{"/C", itself.BinPath}, itself.Params...)
+		} else {
+			shell = os.Getenv("SHELL")
+			if shell == "" {
+				shell = "/bin/bash"
+			}
+			args = append([]string{"-c", itself.BinPath}, itself.Params...)
+		}
+		cmd := exec.Command(shell, args...)
 		HideWindows(cmd)
-		cmd.Env = os.Environ()
 		cmd.Dir = itself.Dir
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
