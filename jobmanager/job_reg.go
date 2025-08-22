@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -338,7 +339,12 @@ func (itself *Job) JobInit() error {
 			if shell == "" {
 				shell = "/bin/bash"
 			}
-			args = append([]string{"-c", itself.BinPath}, itself.Params...)
+			// 将命令和参数拼接成一个完整的命令字符串
+			fullCommand := itself.BinPath
+			if len(itself.Params) > 0 {
+				fullCommand += " " + strings.Join(itself.Params, " ")
+			}
+			args = []string{"-c", fullCommand}
 		}
 		cmd := exec.Command(shell, args...)
 		HideWindows(cmd)
