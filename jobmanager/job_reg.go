@@ -1,23 +1,23 @@
 package jobmanager
 
 import (
-    "context"
-    "encoding/json"
-    "errors"
-    "fmt"
-    "log/slog"
-    "os"
-    "os/exec"
-    "path"
-    "path/filepath"
-    "runtime"
-    "strings"
-    "sync"
-    "time"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
 
-    "github.com/leancodebox/rooster/roosterSay"
-    "github.com/leancodebox/rooster/resource"
-    "github.com/robfig/cron/v3"
+	"github.com/leancodebox/rooster/resource"
+	"github.com/leancodebox/rooster/roosterSay"
+	"github.com/robfig/cron/v3"
 )
 
 var startTime = time.Now()
@@ -163,6 +163,14 @@ func (itself *Job) jobGuard() {
 			msg := itself.JobName + "程序终止尝试重新运行"
 			roosterSay.Send(msg)
 			slog.Info(msg)
+			var maxDelay = 16
+			calculatedDelay := maxDelay
+			if consecutiveFailures < 10 {
+				calculatedDelay = 1 << uint(consecutiveFailures)
+			}
+			// 确保延迟不超过最大限制
+			actualDelay := time.Duration(min(calculatedDelay, maxDelay))
+			time.Sleep(actualDelay * time.Second)
 		}
 	}
 }
@@ -244,20 +252,20 @@ func getConfigPath() (string, error) {
 }
 
 func RegByUserConfig() error {
-    jobConfigPath, err := getConfigPath()
-    if err != nil {
-        return err
-    }
-    fileData, err := os.ReadFile(jobConfigPath)
-    if err != nil {
-        fileData = resource.GetJobConfigDefault()
-        if len(fileData) == 0 {
-            return err
-        }
-        _ = os.WriteFile(jobConfigPath, fileData, 0644)
-    }
-    RegV2(fileData)
-    return nil
+	jobConfigPath, err := getConfigPath()
+	if err != nil {
+		return err
+	}
+	fileData, err := os.ReadFile(jobConfigPath)
+	if err != nil {
+		fileData = resource.GetJobConfigDefault()
+		if len(fileData) == 0 {
+			return err
+		}
+		_ = os.WriteFile(jobConfigPath, fileData, 0644)
+	}
+	RegV2(fileData)
+	return nil
 }
 
 func flushConfig() error {
@@ -290,26 +298,26 @@ func (itself *Job) RunOnce() error {
 }
 
 func execAction(job Job) {
-    var shell string
-    var args []string
-    if runtime.GOOS == "windows" {
-        shell = "cmd.exe"
-        args = append([]string{"/C", job.BinPath}, job.Params...)
-    } else {
-        shell = os.Getenv("SHELL")
-        if shell == "" {
-            shell = "/bin/bash"
-        }
-        fullCommand := job.BinPath
-        if len(job.Params) > 0 {
-            fullCommand += " " + strings.Join(job.Params, " ")
-        }
-        args = []string{"-l", "-c", fullCommand}
-    }
-    cmd := exec.Command(shell, args...)
-    cmd.Env = os.Environ()
-    cmd.Dir = job.Dir
-    cmd.Stdin = os.Stdin
+	var shell string
+	var args []string
+	if runtime.GOOS == "windows" {
+		shell = "cmd.exe"
+		args = append([]string{"/C", job.BinPath}, job.Params...)
+	} else {
+		shell = os.Getenv("SHELL")
+		if shell == "" {
+			shell = "/bin/bash"
+		}
+		fullCommand := job.BinPath
+		if len(job.Params) > 0 {
+			fullCommand += " " + strings.Join(job.Params, " ")
+		}
+		args = []string{"-l", "-c", fullCommand}
+	}
+	cmd := exec.Command(shell, args...)
+	cmd.Env = os.Environ()
+	cmd.Dir = job.Dir
+	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	HideWindows(cmd)
@@ -337,28 +345,28 @@ func execAction(job Job) {
 func (itself *Job) JobInit() error {
 	itself.confLock.Lock()
 	defer itself.confLock.Unlock()
-    if itself.cmd == nil {
-        var shell string
-        var args []string
-        if runtime.GOOS == "windows" {
-            shell = "cmd.exe"
-            args = append([]string{"/C", itself.BinPath}, itself.Params...)
-        } else {
-            shell = os.Getenv("SHELL")
-            if shell == "" {
-                shell = "/bin/bash"
-            }
-            // 将命令和参数拼接成一个完整的命令字符串
-            fullCommand := itself.BinPath
-            if len(itself.Params) > 0 {
-                fullCommand += " " + strings.Join(itself.Params, " ")
-            }
-            args = []string{"-l", "-c", fullCommand}
-        }
-        cmd := exec.Command(shell, args...)
-        HideWindows(cmd)
-        cmd.Dir = itself.Dir
-        cmd.Stdin = os.Stdin
+	if itself.cmd == nil {
+		var shell string
+		var args []string
+		if runtime.GOOS == "windows" {
+			shell = "cmd.exe"
+			args = append([]string{"/C", itself.BinPath}, itself.Params...)
+		} else {
+			shell = os.Getenv("SHELL")
+			if shell == "" {
+				shell = "/bin/bash"
+			}
+			// 将命令和参数拼接成一个完整的命令字符串
+			fullCommand := itself.BinPath
+			if len(itself.Params) > 0 {
+				fullCommand += " " + strings.Join(itself.Params, " ")
+			}
+			args = []string{"-l", "-c", fullCommand}
+		}
+		cmd := exec.Command(shell, args...)
+		HideWindows(cmd)
+		cmd.Dir = itself.Dir
+		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		itself.cmd = cmd
