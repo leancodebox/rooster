@@ -2,11 +2,12 @@ package main
 
 import (
 	_ "embed"
-	"github.com/leancodebox/rooster/jobmanager"
-	"github.com/leancodebox/rooster/jobmanagerserver"
 	"log/slog"
 	"os"
 	"os/signal"
+
+	"github.com/leancodebox/rooster/jobmanager"
+	"github.com/leancodebox/rooster/jobmanagerserver"
 )
 
 func init() {
