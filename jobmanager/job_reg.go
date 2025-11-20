@@ -1,22 +1,23 @@
 package jobmanager
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"log/slog"
-	"os"
-	"os/exec"
-	"path"
-	"path/filepath"
-	"runtime"
-	"strings"
-	"sync"
-	"time"
+    "context"
+    "encoding/json"
+    "errors"
+    "fmt"
+    "log/slog"
+    "os"
+    "os/exec"
+    "path"
+    "path/filepath"
+    "runtime"
+    "strings"
+    "sync"
+    "time"
 
-	"github.com/leancodebox/rooster/roosterSay"
-	"github.com/robfig/cron/v3"
+    "github.com/leancodebox/rooster/roosterSay"
+    "github.com/leancodebox/rooster/resource"
+    "github.com/robfig/cron/v3"
 )
 
 var startTime = time.Now()
@@ -243,16 +244,20 @@ func getConfigPath() (string, error) {
 }
 
 func RegByUserConfig() error {
-	jobConfigPath, err := getConfigPath()
-	if err != nil {
-		return err
-	}
-	fileData, err := os.ReadFile(jobConfigPath)
-	if err != nil {
-		return err
-	}
-	RegV2(fileData)
-	return nil
+    jobConfigPath, err := getConfigPath()
+    if err != nil {
+        return err
+    }
+    fileData, err := os.ReadFile(jobConfigPath)
+    if err != nil {
+        fileData = resource.GetJobConfigDefault()
+        if len(fileData) == 0 {
+            return err
+        }
+        _ = os.WriteFile(jobConfigPath, fileData, 0644)
+    }
+    RegV2(fileData)
+    return nil
 }
 
 func flushConfig() error {

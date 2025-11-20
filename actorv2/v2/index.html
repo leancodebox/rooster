@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Task Manager V2</title>
+  <script src="/actor-v2/twilwindcss-3.4.17.js"></script>
+  <link rel="stylesheet" href="/actor-v2/style.css">
+</head>
+<body class="bg-gray-50 text-gray-900">
+  <div class="max-w-6xl mx-auto p-6">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-semibold">Task Manager</h1>
+      <div id="runtime" class="text-sm text-gray-600"></div>
+    </div>
+
+    <div class="flex gap-3 mb-6">
+      <button id="refresh" class="px-3 py-2 bg-blue-600 text-white rounded">刷新列表</button>
+      <button id="addResident" class="px-3 py-2 bg-green-600 text-white rounded">新增常驻任务</button>
+      <button id="addScheduled" class="px-3 py-2 bg-emerald-600 text-white rounded">新增定时任务</button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-lg font-medium">常驻任务</h2>
+        </div>
+        <table class="w-full text-sm bg-white shadow rounded overflow-hidden">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="py-2 px-3 text-left">JobName</th>
+              <th class="py-2 px-3 text-left">跟随启动</th>
+              <th class="py-2 px-3 text-left">运行状态</th>
+              <th class="py-2 px-3 text-left">操作</th>
+            </tr>
+          </thead>
+          <tbody id="residentBody"></tbody>
+        </table>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-lg font-medium">定时任务</h2>
+        </div>
+        <table class="w-full text-sm bg-white shadow rounded overflow-hidden">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="py-2 px-3 text-left">JobName</th>
+              <th class="py-2 px-3 text-left">已开启</th>
+              <th class="py-2 px-3 text-left">操作</th>
+            </tr>
+          </thead>
+          <tbody id="scheduledBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-4 right-4 hidden"></div>
+
+    <div id="modal" class="fixed inset-0 hidden bg-black/30 items-center justify-center">
+      <div class="bg-white w-full max-w-xl rounded shadow p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div id="modalTitle" class="text-lg font-medium"></div>
+          <button id="closeModal" class="text-gray-500">✕</button>
+        </div>
+        <form id="taskForm" class="space-y-3">
+          <input type="hidden" name="uuid" />
+          <div>
+            <label class="block text-sm">JobName</label>
+            <input name="jobName" class="mt-1 w-full border rounded px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-sm">类型</label>
+            <select name="type" class="mt-1 w-full border rounded px-3 py-2">
+              <option value="1">常驻任务</option>
+              <option value="2">定时任务</option>
+            </select>
+          </div>
+          <div id="cronField" class="hidden">
+            <label class="block text-sm">Cron</label>
+            <input name="spec" class="mt-1 w-full border rounded px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-sm">BinPath</label>
+            <input name="binPath" class="mt-1 w-full border rounded px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-sm">RunPath</label>
+            <input name="dir" class="mt-1 w-full border rounded px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-sm">Params</label>
+            <input name="paramsStr" placeholder="以空格分隔" class="mt-1 w-full border rounded px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-sm">Log</label>
+            <select name="outputType" class="mt-1 w-full border rounded px-3 py-2">
+              <option value="1">标准</option>
+              <option value="2">文件</option>
+            </select>
+          </div>
+          <div id="logDirField" class="hidden">
+            <label class="block text-sm">LogDir</label>
+            <input name="outputPath" class="mt-1 w-full border rounded px-3 py-2" />
+          </div>
+          <div class="flex justify-end gap-3 pt-2">
+            <button type="button" id="cancelBtn" class="px-3 py-2 border rounded">放弃</button>
+            <button type="submit" class="px-3 py-2 bg-blue-600 text-white rounded">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="/actor-v2/app.js"></script>
+</body>
+</html>
