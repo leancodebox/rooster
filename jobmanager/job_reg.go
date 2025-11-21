@@ -285,22 +285,26 @@ func (itself *Job) RunOnce() error {
 }
 
 func execAction(job Job) {
-	var shell string
-	var args []string
-	if runtime.GOOS == "windows" {
-		shell = "cmd.exe"
-		args = append([]string{"/C", job.BinPath}, job.Params...)
-	} else {
-		shell = os.Getenv("SHELL")
-		if shell == "" {
-			shell = "/bin/bash"
-		}
-		args = append([]string{"-c", job.BinPath}, job.Params...)
-	}
-	cmd := exec.Command(shell, args...)
-	cmd.Env = os.Environ()
-	cmd.Dir = job.Dir
-	cmd.Stdin = os.Stdin
+    var shell string
+    var args []string
+    if runtime.GOOS == "windows" {
+        shell = "cmd.exe"
+        args = append([]string{"/C", job.BinPath}, job.Params...)
+    } else {
+        shell = os.Getenv("SHELL")
+        if shell == "" {
+            shell = "/bin/bash"
+        }
+        fullCommand := job.BinPath
+        if len(job.Params) > 0 {
+            fullCommand += " " + strings.Join(job.Params, " ")
+        }
+        args = []string{"-l", "-c", fullCommand}
+    }
+    cmd := exec.Command(shell, args...)
+    cmd.Env = os.Environ()
+    cmd.Dir = job.Dir
+    cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	HideWindows(cmd)
@@ -328,28 +332,28 @@ func execAction(job Job) {
 func (itself *Job) JobInit() error {
 	itself.confLock.Lock()
 	defer itself.confLock.Unlock()
-	if itself.cmd == nil {
-		var shell string
-		var args []string
-		if runtime.GOOS == "windows" {
-			shell = "cmd.exe"
-			args = append([]string{"/C", itself.BinPath}, itself.Params...)
-		} else {
-			shell = os.Getenv("SHELL")
-			if shell == "" {
-				shell = "/bin/bash"
-			}
-			// 将命令和参数拼接成一个完整的命令字符串
-			fullCommand := itself.BinPath
-			if len(itself.Params) > 0 {
-				fullCommand += " " + strings.Join(itself.Params, " ")
-			}
-			args = []string{"-c", fullCommand}
-		}
-		cmd := exec.Command(shell, args...)
-		HideWindows(cmd)
-		cmd.Dir = itself.Dir
-		cmd.Stdin = os.Stdin
+    if itself.cmd == nil {
+        var shell string
+        var args []string
+        if runtime.GOOS == "windows" {
+            shell = "cmd.exe"
+            args = append([]string{"/C", itself.BinPath}, itself.Params...)
+        } else {
+            shell = os.Getenv("SHELL")
+            if shell == "" {
+                shell = "/bin/bash"
+            }
+            // 将命令和参数拼接成一个完整的命令字符串
+            fullCommand := itself.BinPath
+            if len(itself.Params) > 0 {
+                fullCommand += " " + strings.Join(itself.Params, " ")
+            }
+            args = []string{"-l", "-c", fullCommand}
+        }
+        cmd := exec.Command(shell, args...)
+        HideWindows(cmd)
+        cmd.Dir = itself.Dir
+        cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		itself.cmd = cmd

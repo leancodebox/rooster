@@ -1,10 +1,11 @@
 package jobmanager
 
 import (
-	"github.com/robfig/cron/v3"
 	"os/exec"
 	"sync"
 	"time"
+
+	"github.com/robfig/cron/v3"
 )
 
 var runStatusName = [...]string{
@@ -38,7 +39,7 @@ type RunOptions struct {
 type Job struct {
 	UUID    string     `json:"uuid"`
 	JobName string     `json:"jobName"`
-	Type    int        `json:"type"` //运行模式 0 常驻 1 定时
+	Type    int        `json:"type"` //运行模式 1 常驻 / 2 定时
 	Run     bool       `json:"run"`
 	BinPath string     `json:"binPath"`
 	Params  []string   `json:"params"`
