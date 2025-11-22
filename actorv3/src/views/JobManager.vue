@@ -34,15 +34,14 @@ const appRunTime = ref({start: '', runTime: ''})
 const defaultLogDir = ref('')
 const model = ref(getInitData(1))
 let timer: any = 0
-
-function pad2(n: number) { return n < 10 ? `0${n}` : `${n}` }
-function formatRunTime(ms: number) {
+const runtimeDigits = ref({day: 0, hour: 0, minute: 0, second: 0})
+function calcDigits(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000))
   const day = Math.floor(s / 86400)
   const hour = Math.floor((s % 86400) / 3600)
   const minute = Math.floor((s % 3600) / 60)
   const second = s % 60
-  return `${pad2(day)}天${pad2(hour)}时${pad2(minute)}分${pad2(second)}秒`
+  return {day, hour, minute, second}
 }
 function parseStart(s: string) {
   const p = s.split(/[- :]/).map((x) => parseInt(x, 10))
@@ -223,10 +222,11 @@ onMounted(async () => {
     const info = await runInfo()
     const startStr = info.data.start
     const startAt = parseStart(startStr)
-    appRunTime.value = {runTime: info.data.runTime, start: startStr}
+    appRunTime.value = {runTime: '', start: startStr}
+    runtimeDigits.value = calcDigits(Date.now() - startAt.getTime())
     timer = setInterval(() => {
       const diff = Date.now() - startAt.getTime()
-      appRunTime.value = {runTime: formatRunTime(diff), start: startStr}
+      runtimeDigits.value = calcDigits(diff)
     }, 1000)
   } catch {}
 })
@@ -236,8 +236,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-6">
-    <h1 class="text-2xl font-bold">Task Manager</h1>
+  <div class="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-6 font-mono">
+    <h1 class="text-2xl font-mono">Task Manager</h1>
     <div class="flex items-center justify-between">
       <div class="flex flex-wrap gap-2">
         <button class="btn btn-neutral btn-sm" @click="add(1)" title="新增常驻任务" aria-label="新增常驻任务"><i
@@ -247,7 +247,32 @@ onUnmounted(() => {
         <button class="btn btn-ghost btn-sm" @click="refresh" title="刷新列表" aria-label="刷新列表"><i
             class="fa-solid fa-arrows-rotate text-xl"></i></button>
       </div>
-      <div class="text-sm" v-if="appRunTime.start"> 已运行 {{ appRunTime.runTime }}</div>
+      <div class="text-sm" v-if="appRunTime.start">
+        <div class="grid grid-flow-col auto-cols-max items-center gap-2">
+          <div class="flex items-center gap-1">
+            <span class="countdown font-mono text-sm"><span :style="`--value:${runtimeDigits.day}`"></span></span>
+            <span class="text-sm leading-none">天</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <span class="countdown font-mono text-sm">
+              <span :style="{ '--value': runtimeDigits.hour, '--digits': 2 }"></span>
+            </span>
+            <span class="text-sm leading-none">时</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <span class="countdown font-mono text-sm">
+              <span :style="{ '--value': runtimeDigits.minute, '--digits': 2 }"></span>
+            </span>
+            <span class="text-sm leading-none">分</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <span class="countdown font-mono text-sm">
+              <span :style="{ '--value': runtimeDigits.second, '--digits': 2 }"></span>
+            </span>
+            <span class="text-sm leading-none">秒</span>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div>

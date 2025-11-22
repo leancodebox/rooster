@@ -7,7 +7,7 @@ export default defineConfig({
   base: '/actor/',
   plugins: [tailwindcss(), vue()],
     build: {
-        outDir: '../assert/static/dist',
+        outDir: '../assets/static/dist',
         manifest: true, // 生成 manifest.json
         emptyOutDir: true
     },
