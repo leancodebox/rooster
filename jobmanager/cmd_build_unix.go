@@ -4,8 +4,10 @@ package jobmanager
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 func buildCmd(job *Job) *exec.Cmd {
@@ -18,6 +20,8 @@ func buildCmd(job *Job) *exec.Cmd {
 	}
 	fullCommand := job.BinPath
 	args := []string{"-lc", fullCommand}
+	slog.Info(shell)
+	slog.Info(strings.Join(args, " "))
 	cmd := exec.Command(shell, args...)
 	HideWindows(cmd)
 	cmd.Env = os.Environ()
@@ -38,6 +42,8 @@ func buildCmdWithCtx(ctx context.Context, job *Job) *exec.Cmd {
 	}
 	fullCommand := job.BinPath
 	args := []string{"-lc", fullCommand}
+	slog.Info(shell)
+	slog.Info(strings.Join(args, " "))
 	cmd := exec.CommandContext(ctx, shell, args...)
 	HideWindows(cmd)
 	cmd.Env = os.Environ()

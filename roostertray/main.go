@@ -33,12 +33,6 @@ func logLifecycle(a fyne.App) {
 }
 
 func main() {
-	a := app.New()
-	logLifecycle(a)
-	a.SetIcon(assets.GetAppIcon())
-	serverErr := startRoosterServer()
-	port := jobmanagerserver.GetPort()
-	url := fmt.Sprintf("http://localhost:%d/actor/", port)
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		slog.Error("获取家目录失败", "err", err)
@@ -52,6 +46,12 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(logOut, &slog.HandlerOptions{
 		AddSource: true,
 	})))
+	a := app.New()
+	logLifecycle(a)
+	a.SetIcon(assets.GetAppIcon())
+	serverErr := startRoosterServer()
+	port := jobmanagerserver.GetPort()
+	url := fmt.Sprintf("http://localhost:%d/actor/", port)
 	// 桌面系统设置托盘
 	if desk, ok := a.(desktop.App); ok {
 		var list []*fyne.MenuItem

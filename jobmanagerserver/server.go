@@ -28,9 +28,6 @@ func ServeRun() *http.Server {
 	if port <= 0 {
 		return nil
 	}
-	port = findAvailablePort(port)
-	serverPort = port
-	slog.Info(fmt.Sprintf("rooster 开启server服务 http://localhost:%v/actor", port))
 	//r := gin.Default()
 
 	gin.DisableConsoleColor()
@@ -38,7 +35,6 @@ func ServeRun() *http.Server {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	srv = &http.Server{
-		Addr:           fmt.Sprintf("127.0.0.1:%v", port),
 		Handler:        r,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
@@ -326,10 +322,20 @@ func ServeRun() *http.Server {
 			time.Sleep(500 * time.Millisecond)
 		}
 	})
-
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%v", port))
-	if err != nil {
-		slog.Error("监听端口失败", "err", err.Error(), "port", port)
+	var ln net.Listener
+	for i := 0; i < 1000; i++ {
+		tryPort := port + i
+		l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%v", tryPort))
+		if err == nil {
+			ln = l
+			serverPort = tryPort
+			srv.Addr = fmt.Sprintf("127.0.0.1:%v", tryPort)
+			slog.Info(fmt.Sprintf("rooster 开启server服务 http://localhost:%v/actor", tryPort))
+			break
+		}
+	}
+	if ln == nil {
+		slog.Error("无法绑定端口", "start", port)
 		serverPort = 0
 		return nil
 	}
