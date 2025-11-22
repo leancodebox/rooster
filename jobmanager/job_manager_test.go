@@ -1,16 +1,16 @@
 package jobmanager
 
 import (
-	"context"
-	"fmt"
-	"log/slog"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"testing"
-	"time"
+    "context"
+    "fmt"
+    "log/slog"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "testing"
+    "time"
 
-	"github.com/google/uuid"
+    "github.com/google/uuid"
 )
 
 func TestName(t *testing.T) {
@@ -114,17 +114,21 @@ func TestSH(t *testing.T) {
 }
 
 func TestExecActionSetsStatusAndObservables(t *testing.T) {
-	tmpDir := t.TempDir()
-	job := Job{
-		UUID:    generateUUID(),
-		JobName: "test-echo",
-		Type:    2,
-		Run:     true,
-		BinPath: "/bin/echo",
-		Params:  []string{"ok"},
-		Dir:     tmpDir,
-		Options: RunOptions{OutputType: OutputTypeFile, OutputPath: tmpDir},
-	}
+    tmpDir := t.TempDir()
+    oldHome := userHomeDirFn
+    userHomeDirFn = func() (string, error) { return tmpDir, nil }
+    defer func() { userHomeDirFn = oldHome }()
+    logDir, _ := getLogDir()
+    job := Job{
+        UUID:    generateUUID(),
+        JobName: "test-echo",
+        Type:    2,
+        Run:     true,
+        BinPath: "/bin/echo",
+        Params:  []string{"ok"},
+        Dir:     tmpDir,
+        Options: RunOptions{OutputType: OutputTypeFile, OutputPath: logDir},
+    }
 	job.ConfigInit()
 	execAction(&job)
 	if job.status != Stop {
@@ -136,9 +140,9 @@ func TestExecActionSetsStatusAndObservables(t *testing.T) {
 	if job.LastDuration <= 0 {
 		t.Fatalf("duration not positive: %v", job.LastDuration)
 	}
-	if _, err := os.Stat(filepath.Join(tmpDir, job.JobName+"_log.txt")); err != nil {
-		t.Fatalf("log file missing: %v", err)
-	}
+    if _, err := os.Stat(filepath.Join(logDir, job.JobName+"_log.txt")); err != nil {
+        t.Fatalf("log file missing: %v", err)
+    }
 }
 
 func TestGenerateUUID_ErrorBranch(t *testing.T) {

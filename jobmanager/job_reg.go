@@ -98,10 +98,18 @@ func (itself *Job) ConfigInit() {
 	itself.runOnceLock = &sync.Mutex{}
 	def := jobConfigV2.Config.DefaultOptions
 	if itself.Options.OutputType == 0 {
-		itself.Options.OutputType = def.OutputType
+		if def.OutputType == 0 {
+			itself.Options.OutputType = OutputTypeFile
+		} else {
+			itself.Options.OutputType = def.OutputType
+		}
 	}
 	if itself.Options.OutputPath == "" {
-		itself.Options.OutputPath = def.OutputPath
+		if def.OutputPath != "" {
+			itself.Options.OutputPath = def.OutputPath
+		} else if ld, err := getLogDir(); err == nil {
+			itself.Options.OutputPath = ld
+		}
 	}
 	if itself.Options.MaxFailures == 0 {
 		itself.Options.MaxFailures = def.MaxFailures
@@ -289,6 +297,22 @@ func getConfigPath() (string, error) {
 	return jobConfigPath, nil
 }
 
+func getLogDir() (string, error) {
+	homeDir, err := userHomeDirFn()
+	if err != nil {
+		slog.Error("获取家目录失败", "err", err)
+		homeDir = "tmp"
+	}
+	configDir := path.Join(homeDir, ".roosterTaskConfig")
+	logDir := path.Join(configDir, "log")
+	if _, err = os.Stat(logDir); os.IsNotExist(err) {
+		if err = os.MkdirAll(logDir, os.ModePerm); err != nil {
+			return "", err
+		}
+	}
+	return logDir, nil
+}
+
 func RegByUserConfig() error {
 	jobConfigPath, err := getConfigPath()
 	if err != nil {
@@ -401,6 +425,7 @@ func generateDefaultJobConfig() JobConfigV2 {
 		shellLoop = "for /l %i in (1,0,2) do (echo rooster & timeout /t 1)"
 		tick = "echo tick"
 	}
+	logDir, _ := getLogDir()
 	resident := &Job{
 		UUID:    "",
 		JobName: "echo-loop",
@@ -410,7 +435,7 @@ func generateDefaultJobConfig() JobConfigV2 {
 		Params:  []string{},
 		Dir:     "",
 		Spec:    "",
-		Options: RunOptions{OutputType: OutputTypeFile, OutputPath: "./tmp", MaxFailures: 5},
+		Options: RunOptions{OutputType: OutputTypeFile, OutputPath: logDir, MaxFailures: 5},
 	}
 	scheduled := &Job{
 		UUID:    "",
@@ -421,12 +446,12 @@ func generateDefaultJobConfig() JobConfigV2 {
 		Params:  []string{},
 		Dir:     "",
 		Spec:    "* * * * *",
-		Options: RunOptions{OutputType: OutputTypeFile, OutputPath: "./tmp", MaxFailures: 5},
+		Options: RunOptions{OutputType: OutputTypeFile, OutputPath: logDir, MaxFailures: 5},
 	}
 	return JobConfigV2{
 		TaskList: []*Job{resident, scheduled},
 		Config: BaseConfig{Dashboard: struct {
 			Port int `json:"port"`
-		}{Port: 9090}, DefaultOptions: RunOptions{OutputType: OutputTypeStd, OutputPath: "", MaxFailures: 5}},
+		}{Port: 9090}, DefaultOptions: RunOptions{OutputType: OutputTypeFile, OutputPath: logDir, MaxFailures: 5}},
 	}
 }
