@@ -240,7 +240,7 @@ func (itself *Job) StopJob(updateStatus ...bool) {
 	}
 	if itself.cmd != nil && itself.cmd.Process != nil {
 		_ = itself.cmd.Process.Signal(os.Interrupt)
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 		<-ctx.Done()
 		_ = KillProcessGroup(itself.cmd)

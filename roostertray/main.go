@@ -11,10 +11,10 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/driver/desktop"
-	"fyne.io/fyne/v2/theme"
+
+	"github.com/leancodebox/rooster/assets"
 	"github.com/leancodebox/rooster/jobmanager"
 	"github.com/leancodebox/rooster/jobmanagerserver"
-	"github.com/leancodebox/rooster/resource"
 )
 
 func logLifecycle(a fyne.App) {
@@ -33,11 +33,12 @@ func logLifecycle(a fyne.App) {
 }
 
 func main() {
-	url := "http://localhost:9090/actor/"
 	a := app.New()
 	logLifecycle(a)
-	a.SetIcon(resource.GetLogo())
+	a.SetIcon(assets.GetAppIcon())
 	serverErr := startRoosterServer()
+	port := jobmanagerserver.GetPort()
+	url := fmt.Sprintf("http://localhost:%d/actor/", port)
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		slog.Error("获取家目录失败", "err", err)
@@ -61,6 +62,7 @@ func main() {
 			}
 		})
 		list = append(list, open)
+		list = append(list, fyne.NewMenuItem(fmt.Sprintf("端口: %d", port), nil))
 		if serverErr != nil {
 			list = append(list, fyne.NewMenuItem(serverErr.Error(), func() {
 				err := openURL(url)
@@ -69,12 +71,14 @@ func main() {
 				}
 			}))
 		} else {
-			err := openURL(url)
-			if err != nil {
-				fmt.Println(err)
+			if port > 0 {
+				err := openURL(url)
+				if err != nil {
+					fmt.Println(err)
+				}
 			}
 		}
-		desk.SetSystemTrayIcon(theme.ListIcon())
+		desk.SetSystemTrayIcon(assets.GetTrayIcon())
 
 		m := fyne.NewMenu("rooster-desktop",
 			list...,

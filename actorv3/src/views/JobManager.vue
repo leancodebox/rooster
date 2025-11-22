@@ -179,11 +179,11 @@ onUnmounted(() => {
     <h1 class="text-2xl font-bold">Task Manager</h1>
     <div class="flex items-center justify-between">
       <div class="flex flex-wrap gap-2">
-        <button class="btn btn-primary btn-sm" @click="refresh">刷新列表</button>
-        <button class="btn btn-success btn-sm" @click="add(1)">新增常驻任务</button>
-        <button class="btn btn-success btn-sm" @click="add(2)">新增定时任务</button>
+        <button class="btn btn-primary btn-sm" @click="refresh" title="刷新列表" aria-label="刷新列表"><i class="fa-solid fa-arrows-rotate text-xl"></i></button>
+        <button class="btn btn-success btn-sm" @click="add(1)" title="新增常驻任务" aria-label="新增常驻任务"><i class="fa-solid fa-plus text-xl"></i></button>
+        <button class="btn btn-success btn-sm" @click="add(2)" title="新增定时任务" aria-label="新增定时任务"><i class="fa-solid fa-calendar-plus text-xl"></i></button>
       </div>
-      <div class="text-sm">启动于 {{ appRunTime.start }} 已运行 {{ appRunTime.runTime }}</div>
+      <div class="text-sm" v-if="appRunTime.start"> 已运行 {{ appRunTime.runTime }}</div>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div>
@@ -211,17 +211,11 @@ onUnmounted(() => {
                 }}</span></td>
               <td>
                 <div class="join">
-                  <button class="btn btn-sm join-item" @click="onStopResident(row.uuid)">停止</button>
-                  <button class="btn btn-sm btn-primary join-item" :disabled="row.status===1"
-                          @click="onStartResident(row.uuid)">启动
-                  </button>
-                  <button class="btn btn-sm join-item" @click="edit(row)">编辑</button>
-                  <button class="btn btn-sm join-item" :disabled="row.status===1"
-                          @click="removeTask(row.uuid).then(refresh)">删除
-                  </button>
-                  <button class="btn btn-sm join-item" :disabled="!logMapById[row.uuid]?.hasLog" @click="viewLog(row)">
-                    {{ logMapById[row.uuid]?.hasLog ? (logMapById[row.uuid]?.logPath ? '日志(文件)' : '日志(内存)') : '日志(未开启)' }}
-                  </button>
+                  <button class="btn btn-sm join-item" @click="onStopResident(row.uuid)" title="停止" aria-label="停止"><i class="fa-solid fa-stop text-sm"></i></button>
+                  <button class="btn btn-sm btn-primary join-item" :disabled="row.status===1" @click="onStartResident(row.uuid)" title="启动" aria-label="启动"><i class="fa-solid fa-play text-sm"></i></button>
+                  <button class="btn btn-sm join-item" @click="edit(row)" title="编辑" aria-label="编辑"><i class="fa-solid fa-pen-to-square text-sm"></i></button>
+                  <button class="btn btn-sm join-item" :disabled="row.status===1" @click="removeTask(row.uuid).then(refresh)" title="删除" aria-label="删除"><i class="fa-solid fa-trash text-sm"></i></button>
+                  <button class="btn btn-sm join-item" :disabled="!logMapById[row.uuid]?.hasLog" @click="viewLog(row)" :title="logMapById[row.uuid]?.hasLog ? (logMapById[row.uuid]?.logPath ? '日志(文件)' : '日志(内存)') : '日志(未开启)'" aria-label="查看日志"><i class="fa-regular fa-file-lines text-sm"></i></button>
                 </div>
               </td>
             </tr>
@@ -249,16 +243,11 @@ onUnmounted(() => {
                 }}</span></td>
               <td>
                 <div class="join">
-                  <button class="btn btn-sm join-item" @click="onStopResident(row.uuid)">停止</button>
-                  <button class="btn btn-sm btn-primary join-item" @click="runTask(row.uuid).then(refresh)">运行
-                  </button>
-                  <button class="btn btn-sm join-item" @click="edit(row)">编辑</button>
-                  <button class="btn btn-sm join-item" :disabled="row.status===1"
-                          @click="removeTask(row.uuid).then(refresh)">删除
-                  </button>
-                  <button class="btn btn-sm join-item" :disabled="!logMapById[row.uuid]?.hasLog" @click="viewLog(row)">
-                    {{ logMapById[row.uuid]?.hasLog ? (logMapById[row.uuid]?.logPath ? '日志(文件)' : '日志(内存)') : '日志(未开启)' }}
-                  </button>
+                  <button class="btn btn-sm join-item" @click="onStopResident(row.uuid)" title="停止" aria-label="停止"><i class="fa-solid fa-stop text-sm"></i></button>
+                  <button class="btn btn-sm btn-primary join-item" @click="runTask(row.uuid).then(refresh)" title="运行" aria-label="运行"><i class="fa-solid fa-play text-sm"></i></button>
+                  <button class="btn btn-sm join-item" @click="edit(row)" title="编辑" aria-label="编辑"><i class="fa-solid fa-pen-to-square text-sm"></i></button>
+                  <button class="btn btn-sm join-item" :disabled="row.status===1" @click="removeTask(row.uuid).then(refresh)" title="删除" aria-label="删除"><i class="fa-solid fa-trash text-sm"></i></button>
+                  <button class="btn btn-sm join-item" :disabled="!logMapById[row.uuid]?.hasLog" @click="viewLog(row)" :title="logMapById[row.uuid]?.hasLog ? (logMapById[row.uuid]?.logPath ? '日志(文件)' : '日志(内存)') : '日志(未开启)'" aria-label="查看日志"><i class="fa-regular fa-file-lines text-sm"></i></button>
                 </div>
               </td>
             </tr>
@@ -300,8 +289,8 @@ onUnmounted(() => {
               :disabled="model.readonly"/></div>
         </div>
         <div class="modal-action">
-          <button class="btn" @click="onPositiveClick" :disabled="model.readonly">保存</button>
-          <button class="btn" @click="showModal=false">放弃</button>
+          <button class="btn" @click="onPositiveClick" :disabled="model.readonly" title="保存" aria-label="保存"><i class="fa-solid fa-floppy-disk text-xl"></i></button>
+          <button class="btn" @click="showModal=false" title="关闭" aria-label="关闭"><i class="fa-solid fa-xmark text-xl"></i></button>
         </div>
       </div>
     </div>
@@ -323,7 +312,7 @@ onUnmounted(() => {
         <pre id="log-view-pre" class="max-h-[420px] overflow-auto bg-black text-gray-100 p-3 rounded font-mono text-sm">{{
             logContent
           }}</pre>
-        <div class="modal-action"><button class="btn" :disabled="!logInfo.logPath" @click="downloadLog">下载</button><button class="btn" @click="showLogModal=false; stopStreaming()">关闭</button></div>
+        <div class="modal-action"><button class="btn" :disabled="!logInfo.logPath" @click="downloadLog" title="下载" aria-label="下载"><i class="fa-solid fa-download text-xl"></i></button><button class="btn" @click="showLogModal=false; stopStreaming()" title="关闭" aria-label="关闭"><i class="fa-solid fa-xmark text-xl"></i></button></div>
       </div>
     </div>
   </div>

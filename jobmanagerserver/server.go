@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -18,16 +18,18 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/leancodebox/rooster/assert"
 	"github.com/leancodebox/rooster/jobmanager"
-	"github.com/leancodebox/rooster/jobmanagerserver/serverinfo"
 )
 
 var srv *http.Server
+var serverPort int
 
 func ServeRun() *http.Server {
 	port := jobmanager.GetHttpConfig().Dashboard.Port
 	if port <= 0 {
 		return nil
 	}
+	port = findAvailablePort(port)
+	serverPort = port
 	slog.Info(fmt.Sprintf("rooster 开启server服务 http://localhost:%v/actor", port))
 	//r := gin.Default()
 
@@ -43,7 +45,6 @@ func ServeRun() *http.Server {
 		MaxHeaderBytes: 1 << 20,
 	}
 	r.Use(GinCors)
-	r.Use(IpLimit)
 	r.NoRoute(func(c *gin.Context) {
 		c.Redirect(http.StatusTemporaryRedirect, "/actor")
 	})
@@ -322,13 +323,32 @@ func ServeRun() *http.Server {
 		}
 	})
 
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%v", port))
+	if err != nil {
+		slog.Error("监听端口失败", "err", err.Error(), "port", port)
+		serverPort = 0
+		return nil
+	}
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("listen: %s\n", err)
+		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("Serve 失败", "err", err.Error())
 		}
 	}()
 
 	return srv
+}
+
+func findAvailablePort(start int) int {
+	p := start
+	for i := 0; i < 1000; i++ {
+		l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p))
+		if err == nil {
+			_ = l.Close()
+			return p
+		}
+		p++
+	}
+	return start
 }
 func ServeStop() {
 	if srv == nil {
@@ -341,6 +361,10 @@ func ServeStop() {
 		slog.Info("Server Shutdown:", "err", err.Error())
 	}
 	jobmanager.StopAll()
+}
+
+func GetPort() int {
+	return serverPort
 }
 
 func getJobStatusById(id string) (jobmanager.JobStatusShow, bool) {
@@ -439,17 +463,6 @@ func GinCors(context *gin.Context) {
 		context.AbortWithStatus(http.StatusNoContent)
 	}
 	context.Next()
-}
-
-func IpLimit(c *gin.Context) {
-	clientIP := c.ClientIP()
-	ip, _ := serverinfo.GetLocalIp()
-	if len(ip) != 0 && clientIP != ip && clientIP != "::1" && clientIP != "127.0.0.1" {
-		slog.Error("ipLimit", "clientIp", clientIP, "localIp", ip)
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Access denied"})
-		return
-	}
-	c.Next()
 }
 
 func formatDuration(d time.Duration) string {
