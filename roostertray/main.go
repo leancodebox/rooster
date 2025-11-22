@@ -23,6 +23,7 @@ func logLifecycle(a fyne.App) {
 		slog.Info("Lifecycle: Started")
 	})
 	a.Lifecycle().SetOnStopped(func() {
+		slog.Info("Lifecycle: Stop")
 		stop()
 	})
 	a.Lifecycle().SetOnEnteredForeground(func() {

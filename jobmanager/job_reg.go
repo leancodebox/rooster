@@ -231,6 +231,9 @@ func (itself *Job) ForceRunJob() error {
 func (itself *Job) StopJob(updateStatus ...bool) {
 	itself.confLock.Lock()
 	defer itself.confLock.Unlock()
+	defer func() {
+		itself.cmd = nil
+	}()
 
 	if len(updateStatus) == 1 && updateStatus[0] == true {
 		itself.Run = false
@@ -240,10 +243,28 @@ func (itself *Job) StopJob(updateStatus ...bool) {
 	}
 	if itself.cmd != nil && itself.cmd.Process != nil {
 		_ = itself.cmd.Process.Signal(os.Interrupt)
+		done := make(chan error, 1)
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
-		<-ctx.Done()
-		_ = KillProcessGroup(itself.cmd)
+		// 等待进程退出
+		go func() {
+			_, err := itself.cmd.Process.Wait()
+			done <- err
+		}()
+		select {
+		case err := <-done:
+			if err != nil {
+				slog.Info(err.Error(), "jobName", itself.JobName)
+			} else {
+				slog.Info("waitEnd", "jobName", itself.JobName)
+			}
+			return
+		case <-ctx.Done():
+			slog.Info("KillProcessGroup", "jobName", itself.JobName)
+			if err := KillProcessGroup(itself.cmd); err != nil {
+				slog.Info(err.Error())
+			}
+		}
 	}
 	itself.status = Stop
 }

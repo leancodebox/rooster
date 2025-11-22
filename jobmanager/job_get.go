@@ -82,10 +82,17 @@ func JobStopResidentTask(jobId string) error {
 
 func StopAll() {
 	StartClose()
+	wg := sync.WaitGroup{}
 	for _, item := range jobConfigV2.GetResidentTask() {
-		item.StopJob()
-		slog.Info(item.JobName + "退出")
+		slog.Info(item.JobName + "准备退出")
+		wg.Go(func(job *Job) func() {
+			return func() {
+				job.StopJob()
+				slog.Info(job.JobName + "退出")
+			}
+		}(item))
 	}
+	wg.Wait()
 }
 
 func RunStartTime() time.Time {
