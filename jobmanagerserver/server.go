@@ -18,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/leancodebox/rooster/actor"
 	"github.com/leancodebox/rooster/actorv2"
+	"github.com/leancodebox/rooster/actorv3"
 	"github.com/leancodebox/rooster/jobmanager"
 	"github.com/leancodebox/rooster/jobmanagerserver/serverinfo"
 )
@@ -52,6 +53,8 @@ func ServeRun() *http.Server {
 	act.StaticFS("", PFilSystem("./dist", actor.GetActorFs()))
 	actV2 := r.Group("actor-v2")
 	actV2.StaticFS("", PFilSystem("./v2", actorv2.GetActorV2Fs()))
+	actV3 := r.Group("actor-v3")
+	actV3.StaticFS("", PFilSystem("./v3", actorv3.GetActorV3Fs()))
 	api := r.Group("api")
 	api.GET("/job-list", func(c *gin.Context) {
 		all := jobmanager.JobList()
