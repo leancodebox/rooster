@@ -1,13 +1,18 @@
 package roosterSay
 
 import (
-	"fmt"
-	"github.com/gen2brain/beeep"
+	"fyne.io/fyne/v2"
 )
 
+var entity fyne.App
+
+func InitFyneApp(app fyne.App) {
+	entity = app
+}
+
 func Send(msg string) {
-	err := beeep.Notify("Rooster", msg, "")
-	if err != nil {
-		fmt.Println(err)
+	if entity == nil {
+		return
 	}
+	entity.SendNotification(fyne.NewNotification("Rooster", msg))
 }

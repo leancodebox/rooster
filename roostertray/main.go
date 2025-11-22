@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/theme"
+	"github.com/leancodebox/rooster/roosterSay"
 
 	"github.com/leancodebox/rooster/assets"
 	"github.com/leancodebox/rooster/jobmanager"
@@ -48,7 +49,7 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(logOut, &slog.HandlerOptions{
 		AddSource: true,
 	})))
-	a := app.New()
+	a := app.NewWithID("com.leancodebox.rooster")
 	logLifecycle(a)
 	a.SetIcon(assets.GetAppIcon())
 	serverErr := startRoosterServer()
@@ -89,6 +90,7 @@ func main() {
 
 		desk.SetSystemTrayMenu(m)
 	}
+	roosterSay.InitFyneApp(a)
 	a.Run()
 }
 
