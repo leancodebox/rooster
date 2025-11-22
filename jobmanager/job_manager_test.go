@@ -2,12 +2,15 @@ package jobmanager
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func TestName(t *testing.T) {
@@ -135,5 +138,71 @@ func TestExecActionSetsStatusAndObservables(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(tmpDir, job.JobName+"_log.txt")); err != nil {
 		t.Fatalf("log file missing: %v", err)
+	}
+}
+
+func TestGenerateUUID_ErrorBranch(t *testing.T) {
+	old := uuidGen
+	uuidGen = func() (uuid.UUID, error) { return uuid.UUID{}, fmt.Errorf("err") }
+	defer func() { uuidGen = old }()
+	s := generateUUID()
+	if len(s) == 0 {
+		t.Fatalf("uuid fallback empty")
+	}
+}
+
+func TestGetConfigPath_ErrorHomeDir(t *testing.T) {
+	old := userHomeDirFn
+	userHomeDirFn = func() (string, error) { return "", fmt.Errorf("err") }
+	defer func() { userHomeDirFn = old }()
+	p, err := getConfigPath()
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(p) == 0 {
+		t.Fatalf("config path empty")
+	}
+}
+
+func TestScheduleV2_StartAndStop(t *testing.T) {
+	// ensure cron starts and can be stopped
+	job := &Job{UUID: generateUUID(), JobName: "cron-echo", Type: JobTypeScheduled, Run: true, BinPath: "/bin/echo", Params: []string{"hi"}}
+	scheduleV2([]*Job{job})
+	// stop immediately
+	c.Stop()
+}
+
+func TestJobGuard_FailureBackoffWithoutSleep(t *testing.T) {
+	// replace sleep to speed up
+	old := sleepFn
+	sleepFn = func(d time.Duration) {}
+	defer func() { sleepFn = old }()
+
+	j := &Job{UUID: generateUUID(), JobName: "fast-exit", Type: JobTypeResident, Run: true, BinPath: "/bin/echo", Params: []string{"x"}, Options: RunOptions{MaxFailures: 1, MinRunSeconds: int(maxExecutionTime.Seconds()) + 1}}
+	j.ConfigInit()
+	// make command exit quickly
+	j.cmd = buildCmd(j)
+	done := make(chan struct{})
+	go func() { j.jobGuard(); close(done) }()
+	// allow guard to run once and stop due to MaxFailures
+	<-done
+}
+
+func TestStopJobCancelsContext(t *testing.T) {
+	tmpDir := t.TempDir()
+	j := &Job{UUID: generateUUID(), JobName: "stop-sleep", Type: JobTypeResident, Run: true, BinPath: "/bin/bash", Params: []string{"-lc", "sleep 2"}, Dir: tmpDir}
+	j.ConfigInit()
+	if err := j.JobInit(); err != nil {
+		t.Fatalf("JobInit err: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	j.StopJob(true)
+}
+
+func TestClosedAndStartClose_Last(t *testing.T) {
+	// place last to avoid affecting other tests
+	StartClose()
+	if !Closed() {
+		t.Fatalf("Closed not true after StartClose")
 	}
 }

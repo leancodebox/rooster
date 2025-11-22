@@ -9,11 +9,8 @@ import (
 	"log/slog"
 	"math/rand"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
-	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +28,9 @@ func Closed() bool {
 }
 func StartClose() {
 	signClose = true
+}
+func StartOpen() {
+	signClose = false
 }
 
 type RunStatus int
@@ -77,7 +77,7 @@ func scheduleV2(jobList []*Job) {
 			slog.Info(fmt.Sprintf("%v 加入任务", job.GetJobName()))
 		}
 	}
-	c.Run()
+	c.Start()
 }
 
 func (itself *Job) ConfigInit() {
@@ -204,10 +204,12 @@ func (itself *Job) jobGuard() {
 			if actualDelay > maxDelay {
 				actualDelay = maxDelay
 			}
-			time.Sleep(time.Duration(actualDelay) * time.Second)
+			sleepFn(time.Duration(actualDelay) * time.Second)
 		}
 	}
 }
+
+var sleepFn = time.Sleep
 
 func (itself *Job) ForceRunJob() error {
 	itself.Run = true
@@ -267,8 +269,10 @@ func GetStartTime() time.Time {
 	return start
 }
 
+var userHomeDirFn = os.UserHomeDir
+
 func getConfigPath() (string, error) {
-	homeDir, err := os.UserHomeDir()
+	homeDir, err := userHomeDirFn()
 	if err != nil {
 		slog.Error("获取家目录失败", "err", err)
 		homeDir = "tmp"
@@ -276,7 +280,7 @@ func getConfigPath() (string, error) {
 	configDir := path.Join(homeDir, ".roosterTaskConfig")
 	slog.Info("当前目录", "homeDir", homeDir)
 	if _, err = os.Stat(configDir); os.IsNotExist(err) {
-		err = os.Mkdir(configDir, os.ModePerm)
+		err = os.MkdirAll(configDir, os.ModePerm)
 		if err != nil {
 			return "", err
 		}
@@ -318,77 +322,10 @@ func flushConfig() error {
 	return nil
 }
 
+// Cron 调度器实例
 var c = cron.New()
 
-func buildCmd(job *Job) *exec.Cmd {
-	if runtime.GOOS == "windows" {
-		shell := "cmd.exe"
-		args := append([]string{"/C", job.BinPath}, job.Params...)
-		cmd := exec.Command(shell, args...)
-		HideWindows(cmd)
-		cmd.Env = os.Environ()
-		cmd.Dir = job.Dir
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd
-	}
-	shell := job.Options.ShellPath
-	if shell == "" {
-		shell = os.Getenv("SHELL")
-	}
-	if shell == "" {
-		shell = "/bin/bash"
-	}
-	fullCommand := job.BinPath
-	if len(job.Params) > 0 {
-		fullCommand += " " + strings.Join(job.Params, " ")
-	}
-	args := []string{"-lc", fullCommand}
-	cmd := exec.Command(shell, args...)
-	HideWindows(cmd)
-	cmd.Env = os.Environ()
-	cmd.Dir = job.Dir
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
-}
-
-func buildCmdWithCtx(ctx context.Context, job *Job) *exec.Cmd {
-	if runtime.GOOS == "windows" {
-		shell := "cmd.exe"
-		args := append([]string{"/C", job.BinPath}, job.Params...)
-		cmd := exec.CommandContext(ctx, shell, args...)
-		HideWindows(cmd)
-		cmd.Env = os.Environ()
-		cmd.Dir = job.Dir
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd
-	}
-	shell := job.Options.ShellPath
-	if shell == "" {
-		shell = os.Getenv("SHELL")
-	}
-	if shell == "" {
-		shell = "/bin/bash"
-	}
-	fullCommand := job.BinPath
-	if len(job.Params) > 0 {
-		fullCommand += " " + strings.Join(job.Params, " ")
-	}
-	args := []string{"-lc", fullCommand}
-	cmd := exec.CommandContext(ctx, shell, args...)
-	HideWindows(cmd)
-	cmd.Env = os.Environ()
-	cmd.Dir = job.Dir
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
-}
+// buildCmd / buildCmdWithCtx moved to platform-specific files for better test coverage
 
 func (itself *Job) RunOnce() error {
 	if itself.runOnceLock.TryLock() {
@@ -401,6 +338,7 @@ func (itself *Job) RunOnce() error {
 	return errors.New("上次手动运行尚未结束")
 }
 
+// execAction 执行一次性任务并记录观测值
 func execAction(job *Job) {
 	ctx, cancel := context.WithCancel(context.Background())
 	job.cancel = cancel
@@ -436,7 +374,7 @@ func execAction(job *Job) {
 	job.cmd = nil
 }
 
-// JobInit 初始化并执行
+// JobInit 初始化并执行常驻任务守护
 func (itself *Job) JobInit() error {
 	itself.confLock.Lock()
 	defer itself.confLock.Unlock()

@@ -9,11 +9,13 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+// 运行状态名映射
 var runStatusName = [...]string{
 	"停止",
 	"运行",
 }
 
+// String 返回运行状态的字符串表示
 func (d RunStatus) String() string {
 	if d < Stop || d > Running {
 		return "Unknown"
@@ -21,9 +23,11 @@ func (d RunStatus) String() string {
 	return runStatusName[d]
 }
 
-const maxExecutionTime = 10 * time.Second // 最大允许的运行时间
-const maxConsecutiveFailures = 3          // 连续失败次数的最大值
+// 最大允许的运行时间与连续失败上限
+const maxExecutionTime = 10 * time.Second
+const maxConsecutiveFailures = 3
 
+// 输出类型定义
 type OutputType int
 
 const (
@@ -31,6 +35,7 @@ const (
 	OutputTypeFile                       // 输出到文件
 )
 
+// RunOptions 定义任务的运行选项
 type RunOptions struct {
 	OutputType    OutputType `json:"outputType"`  // 输出方式
 	OutputPath    string     `json:"outputPath"`  // 输出路径
@@ -39,10 +44,19 @@ type RunOptions struct {
 	MinRunSeconds int        `json:"minRunSeconds"`
 }
 
+// JobType 表示任务类型（常驻或定时）
+type JobType int
+
+const (
+	JobTypeResident  JobType = 1
+	JobTypeScheduled JobType = 2
+)
+
+// Job 表示任务及其运行时状态
 type Job struct {
 	UUID    string     `json:"uuid"`
 	JobName string     `json:"jobName"`
-	Type    int        `json:"type"` //运行模式 1 常驻 / 2 定时
+	Type    JobType    `json:"type"` // 运行模式 1 常驻 / 2 定时
 	Run     bool       `json:"run"`
 	BinPath string     `json:"binPath"`
 	Params  []string   `json:"params"`
@@ -64,10 +78,12 @@ type Job struct {
 	LastDuration time.Duration
 }
 
+// IsRun 返回任务是否处于运行状态
 func (itself *Job) IsRun() bool {
 	return itself.Run
 }
 
+// BaseConfig 为全局配置
 type BaseConfig struct {
 	Dashboard struct {
 		Port int `json:"port"`
@@ -75,24 +91,28 @@ type BaseConfig struct {
 	DefaultOptions RunOptions `json:"defaultOptions"` // 运行选项
 }
 
+// JobConfigV2 是任务列表与配置的组合
 type JobConfigV2 struct {
 	TaskList []*Job     `json:"taskList"`
 	Config   BaseConfig `json:"config"`
 }
 
+// GetResidentTask 返回常驻任务列表
 func (itself *JobConfigV2) GetResidentTask() []*Job {
 	var r []*Job
 	for _, item := range itself.TaskList {
-		if item.Type == 1 {
+		if item.Type == JobTypeResident {
 			r = append(r, item)
 		}
 	}
 	return r
 }
+
+// GetScheduledTask 返回定时任务列表
 func (itself *JobConfigV2) GetScheduledTask() []*Job {
 	var r []*Job
 	for _, item := range itself.TaskList {
-		if item.Type == 2 {
+		if item.Type == JobTypeScheduled {
 			r = append(r, item)
 		}
 	}

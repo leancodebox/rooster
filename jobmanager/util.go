@@ -1,13 +1,16 @@
 package jobmanager
 
 import (
-	"github.com/google/uuid"
 	"time"
+
+	"github.com/google/uuid"
 )
+
+var uuidGen = uuid.NewRandom
 
 func generateUUID() string {
 	var UUID uuid.UUID
-	UUID, err := uuid.NewRandom()
+	UUID, err := uuidGen()
 	if err != nil {
 		return time.Now().Format(time.UnixDate)
 	}

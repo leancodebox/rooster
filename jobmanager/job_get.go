@@ -7,11 +7,11 @@ import (
 	"time"
 )
 
-// JobStatusShow job运行状态
+// JobStatusShow 对外展示的任务状态结构
 type JobStatusShow struct {
 	UUID    string     `json:"uuid"`
 	JobName string     `json:"jobName"`
-	Type    int        `json:"type"` //运行模式 0 常驻 1 定时
+	Type    int        `json:"type"` // 运行模式 1 常驻 / 2 定时
 	Run     bool       `json:"run"`
 	BinPath string     `json:"binPath"`
 	Params  []string   `json:"params"`
@@ -31,7 +31,7 @@ func job2jobStatus(job Job) JobStatusShow {
 	return JobStatusShow{
 		UUID:         job.UUID,
 		JobName:      job.JobName,
-		Type:         job.Type,
+		Type:         int(job.Type),
 		Run:          job.Run,
 		BinPath:      job.BinPath,
 		Params:       job.Params,
@@ -167,7 +167,7 @@ func SaveTask(job JobStatusShow) error {
 		newJob := Job{
 			UUID:    job.UUID,
 			JobName: job.JobName,
-			Type:    job.Type,
+			Type:    JobType(job.Type),
 			Run:     job.Run,
 			BinPath: job.BinPath,
 			Params:  job.Params,
@@ -184,7 +184,7 @@ func SaveTask(job JobStatusShow) error {
 				if jobItem.Run == true {
 					return errors.New("任务处于开启状态不允许修改,如需修改请先关闭")
 				}
-				if jobItem.Type != job.Type {
+				if jobItem.Type != JobType(job.Type) {
 					return errors.New("任务类型不允许修改")
 				}
 				jobItem.JobName = job.JobName
