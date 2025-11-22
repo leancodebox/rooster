@@ -3,6 +3,8 @@ package jobmanager
 import (
 	"encoding/json"
 	"os"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -100,6 +102,31 @@ func TestRegByUserConfigAndFlush(t *testing.T) {
 	}
 	if err := flushConfig(); err != nil {
 		t.Fatalf("flush err: %v", err)
+	}
+}
+
+func TestGenerateDefaultJobConfigContent(t *testing.T) {
+	def := generateDefaultJobConfig()
+	if len(def.TaskList) == 0 {
+		t.Fatal("default config empty")
+	}
+	found := false
+	for _, j := range def.TaskList {
+		if j.Type == JobTypeResident && j.Run && j.JobName == "echo-loop" {
+			found = true
+			if runtime.GOOS == "windows" {
+				if !(len(j.Params) == 0 && strings.Contains(j.BinPath, "for /l")) {
+					t.Fatalf("windows loop not set: %+v", j)
+				}
+			} else {
+				if !(len(j.Params) == 0 && strings.Contains(j.BinPath, "while true")) {
+					t.Fatalf("unix loop not set: %+v", j)
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatal("echo-loop resident task missing")
 	}
 }
 

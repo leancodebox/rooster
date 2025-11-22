@@ -51,8 +51,8 @@ func TestSH(t *testing.T) {
 			// build start
 			unitStartTime := time.Now()
 			ctx, cancel := context.WithCancel(context.Background())
-			cmd := exec.CommandContext(ctx, "/opt/homebrew/bin/php", "/Users/thh/workspace/about/tmp/p.php")
-			cmd.Stdout = os.Stdout
+    cmd := exec.CommandContext(ctx, "/bin/bash", "-lc", "for i in {1..3}; do echo loop-$i; sleep 0.1; done")
+    cmd.Stdout = os.Stdout
 			// build end
 			go func() {
 				defer func() {

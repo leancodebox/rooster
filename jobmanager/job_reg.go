@@ -11,10 +11,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
-	"github.com/leancodebox/rooster/resource"
 	"github.com/leancodebox/rooster/roosterSay"
 	"github.com/robfig/cron/v3"
 )
@@ -295,12 +295,21 @@ func RegByUserConfig() error {
 		return err
 	}
 	fileData, err := os.ReadFile(jobConfigPath)
-	if err != nil {
-		fileData = resource.GetJobConfigDefault()
-		if len(fileData) == 0 {
-			return err
+	if err != nil || len(fileData) == 0 {
+		def := generateDefaultJobConfig()
+		b, _ := json.MarshalIndent(def, "", "  ")
+		_ = os.WriteFile(jobConfigPath, b, 0644)
+		RegV2(b)
+		return nil
+	} else {
+		var tmp JobConfigV2
+		if json.Unmarshal(fileData, &tmp) != nil {
+			def := generateDefaultJobConfig()
+			b, _ := json.MarshalIndent(def, "", "  ")
+			_ = os.WriteFile(jobConfigPath, b, 0644)
+			RegV2(b)
+			return nil
 		}
-		_ = os.WriteFile(jobConfigPath, fileData, 0644)
 	}
 	RegV2(fileData)
 	return nil
@@ -384,4 +393,40 @@ func (itself *Job) JobInit() error {
 		return nil
 	}
 	return errors.New("程序运行中")
+}
+func generateDefaultJobConfig() JobConfigV2 {
+	shellLoop := "while true; do echo 'rooster'; sleep 1; done"
+	tick := "echo 'tick'"
+	if runtime.GOOS == "windows" {
+		shellLoop = "for /l %i in (1,0,2) do (echo rooster & timeout /t 1)"
+		tick = "echo tick"
+	}
+	resident := &Job{
+		UUID:    "",
+		JobName: "echo-loop",
+		Type:    JobTypeResident,
+		Run:     true,
+		BinPath: shellLoop,
+		Params:  []string{},
+		Dir:     "",
+		Spec:    "",
+		Options: RunOptions{OutputType: OutputTypeFile, OutputPath: "./tmp", MaxFailures: 5},
+	}
+	scheduled := &Job{
+		UUID:    "",
+		JobName: "tick",
+		Type:    JobTypeScheduled,
+		Run:     true,
+		BinPath: tick,
+		Params:  []string{},
+		Dir:     "",
+		Spec:    "* * * * *",
+		Options: RunOptions{OutputType: OutputTypeFile, OutputPath: "./tmp", MaxFailures: 5},
+	}
+	return JobConfigV2{
+		TaskList: []*Job{resident, scheduled},
+		Config: BaseConfig{Dashboard: struct {
+			Port int `json:"port"`
+		}{Port: 9090}, DefaultOptions: RunOptions{OutputType: OutputTypeStd, OutputPath: "", MaxFailures: 5}},
+	}
 }
