@@ -31,8 +31,8 @@ func TestGetResidentScheduled(t *testing.T) {
 func TestRegV2_WithJSON(t *testing.T) {
 	conf := JobConfigV2{
 		TaskList: []*Job{
-			{UUID: generateUUID(), JobName: "res", Type: JobTypeResident, Run: false, BinPath: "/bin/echo", Params: []string{"ok"}},
-			{UUID: generateUUID(), JobName: "sch", Type: JobTypeScheduled, Run: true, Spec: "* * * * *", BinPath: "/bin/echo", Params: []string{"ok"}},
+			{UUID: generateUUID(), JobName: "res", Type: JobTypeResident, Run: false, BinPath: "/bin/echo ok"},
+			{UUID: generateUUID(), JobName: "sch", Type: JobTypeScheduled, Run: true, Spec: "* * * * *", BinPath: "/bin/echo ok"},
 		},
 		Config: BaseConfig{DefaultOptions: RunOptions{OutputType: OutputTypeStd}},
 	}
@@ -42,7 +42,7 @@ func TestRegV2_WithJSON(t *testing.T) {
 }
 
 func TestScheduleV2_InvalidSpec(t *testing.T) {
-	job := &Job{UUID: generateUUID(), JobName: "bad-spec", Type: JobTypeScheduled, Run: true, Spec: "", BinPath: "/bin/echo", Params: []string{"ok"}}
+	job := &Job{UUID: generateUUID(), JobName: "bad-spec", Type: JobTypeScheduled, Run: true, Spec: "", BinPath: "/bin/echo ok"}
 	scheduleV2([]*Job{job})
 	c.Stop()
 }
@@ -52,7 +52,7 @@ func TestRegV2_InvalidJSON(t *testing.T) {
 }
 
 func TestStopAll(t *testing.T) {
-	j := &Job{UUID: generateUUID(), JobName: "res-stp", Type: JobTypeResident, Run: true, BinPath: "/bin/echo", Params: []string{"bye"}}
+	j := &Job{UUID: generateUUID(), JobName: "res-stp", Type: JobTypeResident, Run: true, BinPath: "/bin/echo bye"}
 	j.ConfigInit()
 	_ = j.JobInit()
 	StopAll()
@@ -60,7 +60,7 @@ func TestStopAll(t *testing.T) {
 }
 
 func TestStopJob_TimeoutKillPath(t *testing.T) {
-	j := &Job{UUID: generateUUID(), JobName: "kill-path", Type: JobTypeResident, Run: true, BinPath: "/bin/bash", Params: []string{"-lc", "trap '' INT; sleep 10"}}
+	j := &Job{UUID: generateUUID(), JobName: "kill-path", Type: JobTypeResident, Run: true, BinPath: "trap '' INT; sleep 10", Options: RunOptions{ShellPath: "/bin/bash"}}
 	j.ConfigInit()
 	if err := j.JobInit(); err != nil {
 		t.Fatalf("JobInit err: %v", err)
@@ -115,11 +115,11 @@ func TestGenerateDefaultJobConfigContent(t *testing.T) {
 		if j.Type == JobTypeResident && j.Run && j.JobName == "echo-loop" {
 			found = true
 			if runtime.GOOS == "windows" {
-				if !(len(j.Params) == 0 && strings.Contains(j.BinPath, "for /l")) {
+				if !strings.Contains(j.BinPath, "for /l") {
 					t.Fatalf("windows loop not set: %+v", j)
 				}
 			} else {
-				if !(len(j.Params) == 0 && strings.Contains(j.BinPath, "while true")) {
+				if !strings.Contains(j.BinPath, "while true") {
 					t.Fatalf("unix loop not set: %+v", j)
 				}
 			}
@@ -131,7 +131,7 @@ func TestGenerateDefaultJobConfigContent(t *testing.T) {
 }
 
 func TestJobRunOnce_DoubleCall(t *testing.T) {
-	j := &Job{UUID: generateUUID(), JobName: "once", Type: JobTypeScheduled, BinPath: "/bin/echo", Params: []string{"x"}}
+	j := &Job{UUID: generateUUID(), JobName: "once", Type: JobTypeScheduled, BinPath: "/bin/echo x"}
 	j.ConfigInit()
 	if err := j.RunOnce(); err != nil {
 		t.Fatalf("first runonce err: %v", err)
@@ -142,7 +142,7 @@ func TestJobRunOnce_DoubleCall(t *testing.T) {
 }
 
 func TestForceRunJob_Init(t *testing.T) {
-	j := &Job{UUID: generateUUID(), JobName: "force", Type: JobTypeResident, BinPath: "/bin/echo", Params: []string{"x"}}
+	j := &Job{UUID: generateUUID(), JobName: "force", Type: JobTypeResident, BinPath: "/bin/echo x"}
 	j.ConfigInit()
 	if err := j.ForceRunJob(); err != nil {
 		t.Fatalf("ForceRunJob err: %v", err)

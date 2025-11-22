@@ -10,7 +10,7 @@ import (
 
 func buildCmd(job *Job) *exec.Cmd {
 	shell := "cmd.exe"
-	args := append([]string{"/C", job.BinPath}, job.Params...)
+	args := []string{"/C", job.BinPath}
 	cmd := exec.Command(shell, args...)
 	HideWindows(cmd)
 	cmd.Env = os.Environ()
@@ -23,7 +23,7 @@ func buildCmd(job *Job) *exec.Cmd {
 
 func buildCmdWithCtx(ctx context.Context, job *Job) *exec.Cmd {
 	shell := "cmd.exe"
-	args := append([]string{"/C", job.BinPath}, job.Params...)
+	args := []string{"/C", job.BinPath}
 	cmd := exec.CommandContext(ctx, shell, args...)
 	HideWindows(cmd)
 	cmd.Env = os.Environ()

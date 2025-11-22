@@ -1,16 +1,16 @@
 package jobmanager
 
 import (
-    "context"
-    "fmt"
-    "log/slog"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "testing"
-    "time"
+	"context"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+	"time"
 
-    "github.com/google/uuid"
+	"github.com/google/uuid"
 )
 
 func TestName(t *testing.T) {
@@ -51,8 +51,8 @@ func TestSH(t *testing.T) {
 			// build start
 			unitStartTime := time.Now()
 			ctx, cancel := context.WithCancel(context.Background())
-    cmd := exec.CommandContext(ctx, "/bin/bash", "-lc", "for i in {1..3}; do echo loop-$i; sleep 0.1; done")
-    cmd.Stdout = os.Stdout
+			cmd := exec.CommandContext(ctx, "/bin/bash", "-lc", "for i in {1..3}; do echo loop-$i; sleep 0.1; done")
+			cmd.Stdout = os.Stdout
 			// build end
 			go func() {
 				defer func() {
@@ -114,21 +114,20 @@ func TestSH(t *testing.T) {
 }
 
 func TestExecActionSetsStatusAndObservables(t *testing.T) {
-    tmpDir := t.TempDir()
-    oldHome := userHomeDirFn
-    userHomeDirFn = func() (string, error) { return tmpDir, nil }
-    defer func() { userHomeDirFn = oldHome }()
-    logDir, _ := getLogDir()
-    job := Job{
-        UUID:    generateUUID(),
-        JobName: "test-echo",
-        Type:    2,
-        Run:     true,
-        BinPath: "/bin/echo",
-        Params:  []string{"ok"},
-        Dir:     tmpDir,
-        Options: RunOptions{OutputType: OutputTypeFile, OutputPath: logDir},
-    }
+	tmpDir := t.TempDir()
+	oldHome := userHomeDirFn
+	userHomeDirFn = func() (string, error) { return tmpDir, nil }
+	defer func() { userHomeDirFn = oldHome }()
+	logDir, _ := getLogDir()
+	job := Job{
+		UUID:    generateUUID(),
+		JobName: "test-echo",
+		Type:    2,
+		Run:     true,
+		BinPath: "/bin/echo ok",
+		Dir:     tmpDir,
+		Options: RunOptions{OutputType: OutputTypeFile, OutputPath: logDir},
+	}
 	job.ConfigInit()
 	execAction(&job)
 	if job.status != Stop {
@@ -140,9 +139,9 @@ func TestExecActionSetsStatusAndObservables(t *testing.T) {
 	if job.LastDuration <= 0 {
 		t.Fatalf("duration not positive: %v", job.LastDuration)
 	}
-    if _, err := os.Stat(filepath.Join(logDir, job.JobName+"_log.txt")); err != nil {
-        t.Fatalf("log file missing: %v", err)
-    }
+	if _, err := os.Stat(filepath.Join(logDir, job.JobName+"_log.txt")); err != nil {
+		t.Fatalf("log file missing: %v", err)
+	}
 }
 
 func TestGenerateUUID_ErrorBranch(t *testing.T) {
@@ -170,7 +169,7 @@ func TestGetConfigPath_ErrorHomeDir(t *testing.T) {
 
 func TestScheduleV2_StartAndStop(t *testing.T) {
 	// ensure cron starts and can be stopped
-	job := &Job{UUID: generateUUID(), JobName: "cron-echo", Type: JobTypeScheduled, Run: true, BinPath: "/bin/echo", Params: []string{"hi"}}
+	job := &Job{UUID: generateUUID(), JobName: "cron-echo", Type: JobTypeScheduled, Run: true, BinPath: "/bin/echo hi"}
 	scheduleV2([]*Job{job})
 	// stop immediately
 	c.Stop()
@@ -182,7 +181,7 @@ func TestJobGuard_FailureBackoffWithoutSleep(t *testing.T) {
 	sleepFn = func(d time.Duration) {}
 	defer func() { sleepFn = old }()
 
-	j := &Job{UUID: generateUUID(), JobName: "fast-exit", Type: JobTypeResident, Run: true, BinPath: "/bin/echo", Params: []string{"x"}, Options: RunOptions{MaxFailures: 1, MinRunSeconds: int(maxExecutionTime.Seconds()) + 1}}
+	j := &Job{UUID: generateUUID(), JobName: "fast-exit", Type: JobTypeResident, Run: true, BinPath: "/bin/echo x", Options: RunOptions{MaxFailures: 1, MinRunSeconds: int(maxExecutionTime.Seconds()) + 1}}
 	j.ConfigInit()
 	// make command exit quickly
 	j.cmd = buildCmd(j)
@@ -194,7 +193,7 @@ func TestJobGuard_FailureBackoffWithoutSleep(t *testing.T) {
 
 func TestStopJobCancelsContext(t *testing.T) {
 	tmpDir := t.TempDir()
-	j := &Job{UUID: generateUUID(), JobName: "stop-sleep", Type: JobTypeResident, Run: true, BinPath: "/bin/bash", Params: []string{"-lc", "sleep 2"}, Dir: tmpDir}
+	j := &Job{UUID: generateUUID(), JobName: "stop-sleep", Type: JobTypeResident, Run: true, BinPath: "sleep 2", Dir: tmpDir, Options: RunOptions{ShellPath: "/bin/bash"}}
 	j.ConfigInit()
 	if err := j.JobInit(); err != nil {
 		t.Fatalf("JobInit err: %v", err)

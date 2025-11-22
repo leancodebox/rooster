@@ -6,7 +6,6 @@ import (
 	"context"
 	"os"
 	"os/exec"
-	"strings"
 )
 
 func buildCmd(job *Job) *exec.Cmd {
@@ -18,9 +17,6 @@ func buildCmd(job *Job) *exec.Cmd {
 		shell = "/bin/bash"
 	}
 	fullCommand := job.BinPath
-	if len(job.Params) > 0 {
-		fullCommand += " " + strings.Join(job.Params, " ")
-	}
 	args := []string{"-lc", fullCommand}
 	cmd := exec.Command(shell, args...)
 	HideWindows(cmd)
@@ -41,9 +37,6 @@ func buildCmdWithCtx(ctx context.Context, job *Job) *exec.Cmd {
 		shell = "/bin/bash"
 	}
 	fullCommand := job.BinPath
-	if len(job.Params) > 0 {
-		fullCommand += " " + strings.Join(job.Params, " ")
-	}
 	args := []string{"-lc", fullCommand}
 	cmd := exec.CommandContext(ctx, shell, args...)
 	HideWindows(cmd)

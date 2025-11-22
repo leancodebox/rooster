@@ -14,7 +14,6 @@ type JobStatusShow struct {
 	Type    int        `json:"type"` // 运行模式 1 常驻 / 2 定时
 	Run     bool       `json:"run"`
 	BinPath string     `json:"binPath"`
-	Params  []string   `json:"params"`
 	Dir     string     `json:"dir"`
 	Spec    string     `json:"spec"`
 	Options RunOptions `json:"options"` // 运行选项
@@ -34,7 +33,6 @@ func job2jobStatus(job Job) JobStatusShow {
 		Type:         int(job.Type),
 		Run:          job.Run,
 		BinPath:      job.BinPath,
-		Params:       job.Params,
 		Dir:          job.Dir,
 		Spec:         job.Spec,
 		Options:      job.Options,
@@ -170,7 +168,6 @@ func SaveTask(job JobStatusShow) error {
 			Type:    JobType(job.Type),
 			Run:     job.Run,
 			BinPath: job.BinPath,
-			Params:  job.Params,
 			Dir:     job.Dir,
 			Spec:    job.Spec,
 			Options: job.Options,
@@ -190,7 +187,6 @@ func SaveTask(job JobStatusShow) error {
 				jobItem.JobName = job.JobName
 				jobItem.Run = job.Run
 				jobItem.BinPath = job.BinPath
-				jobItem.Params = job.Params
 				jobItem.Dir = job.Dir
 				jobItem.Spec = job.Spec
 				jobItem.Options = job.Options

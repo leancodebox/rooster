@@ -59,7 +59,6 @@ type Job struct {
 	Type    JobType    `json:"type"` // 运行模式 1 常驻 / 2 定时
 	Run     bool       `json:"run"`
 	BinPath string     `json:"binPath"`
-	Params  []string   `json:"params"`
 	Dir     string     `json:"dir"`
 	Spec    string     `json:"spec"`
 	Options RunOptions `json:"options"` // 运行选项
