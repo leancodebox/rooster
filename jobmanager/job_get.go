@@ -161,10 +161,8 @@ func SaveTask(job JobStatusShow) error {
 	needFlush := false
 	defer func() {
 		if needFlush == true {
-			err := flushConfig()
-			if err != nil {
-				slog.Error("flushConfig", "err", err)
-			}
+			flushConfig()
+
 		}
 	}()
 	if job.UUID == "" {
@@ -209,10 +207,7 @@ func RemoveTask(job JobStatusShow) error {
 	removed := false
 	defer func() {
 		if needFlush == true {
-			err := flushConfig()
-			if err != nil {
-				slog.Error("flushConfig", "err", err)
-			}
+			flushConfig()
 		}
 	}()
 

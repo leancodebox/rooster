@@ -28,9 +28,6 @@ func Closed() bool {
 func StartClose() {
 	signClose = true
 }
-func StartOpen() {
-	signClose = false
-}
 
 type RunStatus int
 
@@ -83,10 +80,7 @@ func (itself *Job) ConfigInit() {
 	needFlush := false
 	defer func() {
 		if needFlush == true {
-			err := flushConfig()
-			if err != nil {
-				slog.Error("flushConfig", "err", err)
-			}
+			flushConfig()
 		}
 	}()
 	if itself.UUID == "" {
@@ -345,20 +339,23 @@ func RegByUserConfig() error {
 	return nil
 }
 
-func flushConfig() error {
+func flushConfig() {
 	jobConfigPath, err := getConfigPath()
+	slog.Error("flushConfigErr", "err", err)
 	if err != nil {
-		return err
+		slog.Error("flushConfigErr", "err", err)
+		return
 	}
 	data, err := json.MarshalIndent(jobConfigV2, "", "  ")
 	if err != nil {
-		return err
+		slog.Error("flushConfigErr", "err", err)
+		return
 	}
 	err = os.WriteFile(jobConfigPath, data, 0644)
 	if err != nil {
-		return err
+		slog.Error("flushConfigErr", "err", err)
+		return
 	}
-	return nil
 }
 
 // Cron 调度器实例

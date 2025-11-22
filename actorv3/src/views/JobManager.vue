@@ -180,7 +180,7 @@ async function closeScheduled(jobId: string) {
 }
 
 onMounted(async () => {
-  refresh();
+  await refresh();
   try {
     const r = await getHomePath()
     const h = r.data.home || ''

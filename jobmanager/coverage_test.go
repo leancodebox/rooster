@@ -56,7 +56,6 @@ func TestStopAll(t *testing.T) {
 	j.ConfigInit()
 	_ = j.JobInit()
 	StopAll()
-	StartOpen()
 }
 
 func TestStopJob_TimeoutKillPath(t *testing.T) {
@@ -100,9 +99,7 @@ func TestRegByUserConfigAndFlush(t *testing.T) {
 	if _, err := os.Stat(p); err != nil {
 		t.Fatalf("config not written: %v", err)
 	}
-	if err := flushConfig(); err != nil {
-		t.Fatalf("flush err: %v", err)
-	}
+	flushConfig()
 }
 
 func TestGenerateDefaultJobConfigContent(t *testing.T) {

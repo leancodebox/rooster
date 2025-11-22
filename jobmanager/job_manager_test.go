@@ -99,7 +99,6 @@ func TestSH(t *testing.T) {
 		}
 
 	}()
-	slog.Info("adsa")
 
 	time.Sleep(time.Second * 1)
 	if cmdIsLife {

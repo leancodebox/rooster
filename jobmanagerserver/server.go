@@ -356,18 +356,6 @@ func ServeRun() *http.Server {
 	return srv
 }
 
-func findAvailablePort(start int) int {
-	p := start
-	for i := 0; i < 1000; i++ {
-		l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p))
-		if err == nil {
-			_ = l.Close()
-			return p
-		}
-		p++
-	}
-	return start
-}
 func ServeStop() {
 	if srv == nil {
 		return
@@ -445,29 +433,6 @@ func readTail(path string, lines, bytes, maxBytes int) ([]byte, error) {
 	}
 	tail := strings.Join(parts[len(parts)-lines-1:], "\n")
 	return []byte(tail), nil
-}
-
-type fsFunc func(name string) (fs.File, error)
-
-func (f fsFunc) Open(name string) (fs.File, error) {
-	return f(name)
-}
-
-func upFsHandle(pPath string, fSys fs.FS) fsFunc {
-	return func(name string) (fs.File, error) {
-		assetPath := path.Join(pPath, name)
-		// If we can't find the asset, fs can handle the error
-		file, err := fSys.Open(assetPath)
-		if err != nil {
-			slog.Error(err.Error())
-			return nil, err
-		}
-		return file, err
-	}
-}
-
-func PFilSystem(pPath string, fSys fs.FS) http.FileSystem {
-	return http.FS(upFsHandle(pPath, fSys))
 }
 
 func GinCors(context *gin.Context) {
