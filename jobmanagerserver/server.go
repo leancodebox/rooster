@@ -272,9 +272,6 @@ func ServeRun() *http.Server {
 
 	// logs: stream (SSE)
 	api.GET("/job-log-stream", func(c *gin.Context) {
-		defer func() {
-			slog.Info("停止滚动")
-		}()
 		c.Writer.Header().Set("Content-Type", "text/event-stream")
 		c.Writer.Header().Set("Cache-Control", "no-cache")
 		c.Writer.Header().Set("Connection", "keep-alive")
@@ -299,6 +296,7 @@ func ServeRun() *http.Server {
 		if st, err := f.Stat(); err == nil {
 			pos = st.Size()
 		}
+		lastEmit := time.Now()
 		for {
 			if c.Request.Context().Err() != nil {
 				break
@@ -321,6 +319,13 @@ func ServeRun() *http.Server {
 				c.Writer.Write(buf[:n])
 				c.Writer.Write([]byte("\n\n"))
 				c.Writer.Flush()
+				lastEmit = time.Now()
+			} else {
+				if time.Since(lastEmit) >= 10*time.Second {
+					c.Writer.Write([]byte(": keep-alive\n\n"))
+					c.Writer.Flush()
+					lastEmit = time.Now()
+				}
 			}
 			time.Sleep(500 * time.Millisecond)
 		}
