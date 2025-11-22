@@ -12,8 +12,6 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/theme"
-	"github.com/leancodebox/rooster/roosterSay"
-
 	"github.com/leancodebox/rooster/assets"
 	"github.com/leancodebox/rooster/jobmanager"
 	"github.com/leancodebox/rooster/jobmanagerserver"
@@ -49,19 +47,19 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(logOut, &slog.HandlerOptions{
 		AddSource: true,
 	})))
-	a := app.NewWithID("com.leancodebox.rooster")
-	logLifecycle(a)
-	a.SetIcon(assets.GetAppIcon())
+	roosterApp := app.NewWithID("com.leancodebox.rooster")
+	logLifecycle(roosterApp)
+	roosterApp.SetIcon(assets.GetAppIcon())
 	serverErr := startRoosterServer()
 	port := jobmanagerserver.GetPort()
 	url := fmt.Sprintf("http://localhost:%d/actor/", port)
 	// 桌面系统设置托盘
-	if desk, ok := a.(desktop.App); ok {
+	if desk, ok := roosterApp.(desktop.App); ok {
 		var list []*fyne.MenuItem
 		open := fyne.NewMenuItem("打开管理", func() {
 			err := openURL(url)
 			if err != nil {
-				fmt.Println(err)
+				slog.Info(err.Error())
 			}
 		})
 		list = append(list, open)
@@ -70,14 +68,14 @@ func main() {
 			list = append(list, fyne.NewMenuItem(serverErr.Error(), func() {
 				err := openURL(url)
 				if err != nil {
-					fmt.Println(err)
+					slog.Info(err.Error())
 				}
 			}))
 		} else {
 			if port > 0 {
 				err := openURL(url)
 				if err != nil {
-					fmt.Println(err)
+					slog.Info(err.Error())
 				}
 			}
 		}
@@ -90,8 +88,8 @@ func main() {
 
 		desk.SetSystemTrayMenu(m)
 	}
-	roosterSay.InitFyneApp(a)
-	a.Run()
+	//roosterSay.InitFyneApp(roosterApp)
+	roosterApp.Run()
 }
 
 func startRoosterServer() error {

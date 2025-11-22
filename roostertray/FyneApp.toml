@@ -5,4 +5,4 @@ Icon = "../resource/logo.png"
 Name = "rooster-desktop"
 ID = "com.leancodebox.rooster"
 Version = "0.0.1"
-Build = 10
+Build = 13
