@@ -174,7 +174,7 @@ func (itself *Job) jobGuard() {
 
 		executionTime := time.Since(unitStartTime)
 		if cmdErr != nil {
-			slog.Info(cmdErr.Error())
+			slog.Info(cmdErr.Error(), "jobName", itself.JobName)
 		}
 		threshold := maxExecutionTime
 		if itself.Options.MinRunSeconds > 0 {

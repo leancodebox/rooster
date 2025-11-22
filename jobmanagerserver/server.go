@@ -49,8 +49,12 @@ func ServeRun() *http.Server {
 		c.Redirect(http.StatusTemporaryRedirect, "/actor")
 	})
 	actV3 := r.Group("actor")
-	static, _ := fs.Sub(assert.GetActorV3Fs(), path.Join("static", "dist"))
-	actV3.StaticFS("", http.FS(static))
+	static, err := fs.Sub(assert.GetActorV3Fs(), path.Join("static", "dist"))
+	if err == nil {
+		actV3.StaticFS("", http.FS(static))
+	} else {
+		actV3.GET("/*any", func(c *gin.Context) { c.String(http.StatusOK, "dashboard未构建，请先构建前端") })
+	}
 	api := r.Group("api")
 	go func() {
 		t := time.NewTicker(5 * time.Minute)
