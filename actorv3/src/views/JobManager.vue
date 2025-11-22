@@ -2,17 +2,17 @@
 import {onMounted, onUnmounted, ref} from 'vue'
 import {
   downloadJobLog,
+  getHomePath,
   getJobList,
   getJobLog,
   getJobLogList,
   removeTask,
   runInfo,
   runJob,
+  runOpenCloseTask,
   runTask,
   saveTask,
-  stopJob,
-  getHomePath,
-  runOpenCloseTask
+  stopJob
 } from '../request/remote'
 
 const hasLogById = ref<Record<string, boolean>>({}) // 兼容旧用法
@@ -34,6 +34,26 @@ const appRunTime = ref({start: '', runTime: ''})
 const defaultLogDir = ref('')
 const model = ref(getInitData(1))
 let timer: any = 0
+
+function pad2(n: number) { return n < 10 ? `0${n}` : `${n}` }
+function formatRunTime(ms: number) {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  const day = Math.floor(s / 86400)
+  const hour = Math.floor((s % 86400) / 3600)
+  const minute = Math.floor((s % 3600) / 60)
+  const second = s % 60
+  return `${pad2(day)}天${pad2(hour)}时${pad2(minute)}分${pad2(second)}秒`
+}
+function parseStart(s: string) {
+  const p = s.split(/[- :]/).map((x) => parseInt(x, 10))
+  if (p.length >= 6 && p.every((x) => !isNaN(x))) {
+    const [Y, M, D, h, m, s2] = p as [number, number, number, number, number, number]
+    return new Date(Y, M - 1, D, h, m, s2)
+  }
+  const t = s.replace(' ', 'T')
+  const d = new Date(t)
+  return isNaN(d.getTime()) ? new Date() : d
+}
 
 function getInitData(type: number) {
   return {
@@ -64,7 +84,10 @@ async function viewLog(row: any) {
   logOrigin.value = logInfo.value.hasLog ? (logInfo.value.logPath ? '文件' : '内存') : ''
   isStreaming.value = false
   clearInterval(logTimer)
-  if (evt) { evt.close(); evt = null }
+  if (evt) {
+    evt.close();
+    evt = null
+  }
   currentJob.value = row
   if (!logInfo.value.hasLog) {
     logContent.value = '未开启日志或日志暂无内容'
@@ -96,7 +119,10 @@ function scrollToBottom() {
 function startStreaming() {
   isStreaming.value = true
   clearInterval(logTimer)
-  if (evt) { evt.close(); evt = null }
+  if (evt) {
+    evt.close();
+    evt = null
+  }
   const useFile = !!(currentJob.value && currentJob.value.options && currentJob.value.options.outputType === 2 && currentJob.value.options.outputPath)
   if (useFile) {
     evt = new EventSource(`/api/job-log-stream?jobId=${encodeURIComponent(currentJob.value.uuid)}`)
@@ -105,7 +131,10 @@ function startStreaming() {
       scrollToBottom()
     }
     evt.onerror = () => {
-      if (evt) { evt.close(); evt = null }
+      if (evt) {
+        evt.close();
+        evt = null
+      }
       clearInterval(logTimer)
       logTimer = setInterval(async () => {
         const resp = await getJobLog(currentJob.value.uuid, 200, 0)
@@ -127,7 +156,10 @@ function startStreaming() {
 function stopStreaming() {
   isStreaming.value = false
   clearInterval(logTimer)
-  if (evt) { evt.close(); evt = null }
+  if (evt) {
+    evt.close();
+    evt = null
+  }
 }
 
 async function refresh() {
@@ -174,6 +206,7 @@ async function openScheduled(jobId: string) {
   await runOpenCloseTask(jobId, true)
   await refresh()
 }
+
 async function closeScheduled(jobId: string) {
   await runOpenCloseTask(jobId, false)
   await refresh()
@@ -186,11 +219,16 @@ onMounted(async () => {
     const h = r.data.home || ''
     defaultLogDir.value = h ? `${h}/.roosterTaskConfig/log` : ''
   } catch {}
-  timer = setInterval(() => {
-    runInfo().then((r: any) => {
-      appRunTime.value = {runTime: r.data.runTime, start: r.data.start}
-    })
-  }, 1000)
+  try {
+    const info = await runInfo()
+    const startStr = info.data.start
+    const startAt = parseStart(startStr)
+    appRunTime.value = {runTime: info.data.runTime, start: startStr}
+    timer = setInterval(() => {
+      const diff = Date.now() - startAt.getTime()
+      appRunTime.value = {runTime: formatRunTime(diff), start: startStr}
+    }, 1000)
+  } catch {}
 })
 onUnmounted(() => {
   clearInterval(timer)
@@ -202,9 +240,12 @@ onUnmounted(() => {
     <h1 class="text-2xl font-bold">Task Manager</h1>
     <div class="flex items-center justify-between">
       <div class="flex flex-wrap gap-2">
-        <button class="btn btn-primary btn-sm" @click="refresh" title="刷新列表" aria-label="刷新列表"><i class="fa-solid fa-arrows-rotate text-xl"></i></button>
-        <button class="btn btn-success btn-sm" @click="add(1)" title="新增常驻任务" aria-label="新增常驻任务"><i class="fa-solid fa-plus text-xl"></i></button>
-        <button class="btn btn-success btn-sm" @click="add(2)" title="新增定时任务" aria-label="新增定时任务"><i class="fa-solid fa-calendar-plus text-xl"></i></button>
+        <button class="btn btn-neutral btn-sm" @click="add(1)" title="新增常驻任务" aria-label="新增常驻任务"><i
+            class="fa-solid fa-plus text-xl"></i></button>
+        <button class="btn btn-neutral btn-sm" @click="add(2)" title="新增定时任务" aria-label="新增定时任务"><i
+            class="fa-solid fa-calendar-plus text-xl"></i></button>
+        <button class="btn btn-ghost btn-sm" @click="refresh" title="刷新列表" aria-label="刷新列表"><i
+            class="fa-solid fa-arrows-rotate text-xl"></i></button>
       </div>
       <div class="text-sm" v-if="appRunTime.start"> 已运行 {{ appRunTime.runTime }}</div>
     </div>
@@ -212,7 +253,7 @@ onUnmounted(() => {
       <div>
         <h2 class="text-lg font-semibold mb-2">常驻任务</h2>
         <div class="overflow-x-auto">
-          <table class="table  table-sm border border-base-300 rounded-lg">
+          <table class="table border border-base-300 rounded-lg">
             <thead>
             <tr>
               <th>JobName</th>
@@ -224,21 +265,29 @@ onUnmounted(() => {
             <tbody>
             <tr v-for="row in resident" :key="row.uuid">
               <td class="truncate max-w-[14rem] sm:max-w-[18rem]">{{ row.jobName }}</td>
-              <td class="whitespace-nowrap"><span class="text-[10px] sm:text-sm"
+              <td class="whitespace-nowrap"><span class="text-sm"
                                                   :class="row.run ? 'badge badge-success badge-sm whitespace-nowrap' : 'badge badge-sm whitespace-nowrap'">{{
                   row.run ? '开启' : '关闭'
                 }}</span></td>
-              <td class="whitespace-nowrap"><span class="text-[10px] sm:text-sm"
+              <td class="whitespace-nowrap"><span class="text-sm"
                                                   :class="row.status === 1 ? 'badge badge-success badge-sm whitespace-nowrap' : 'badge badge-warning badge-sm whitespace-nowrap'">{{
                   row.status === 1 ? '运行' : '暂停'
                 }}</span></td>
               <td>
                 <div class="join">
-                  <button class="btn btn-sm join-item" @click="onStopResident(row.uuid)" title="停止" aria-label="停止"><i class="fa-solid fa-stop text-sm"></i></button>
-                  <button class="btn btn-sm btn-primary join-item" :disabled="row.status===1" @click="onStartResident(row.uuid)" title="启动" aria-label="启动"><i class="fa-solid fa-play text-sm"></i></button>
-                  <button class="btn btn-sm join-item" @click="edit(row)" title="编辑" aria-label="编辑"><i class="fa-solid fa-pen-to-square text-sm"></i></button>
-                  <button class="btn btn-sm join-item" :disabled="row.run===true" @click="removeTask(row.uuid).then(refresh)" title="删除" aria-label="删除"><i class="fa-solid fa-trash text-sm"></i></button>
-                  <button class="btn btn-sm join-item" :disabled="!logMapById[row.uuid]?.hasLog" @click="viewLog(row)" :title="logMapById[row.uuid]?.hasLog ? (logMapById[row.uuid]?.logPath ? '日志(文件)' : '日志(内存)') : '日志(未开启)'" aria-label="查看日志"><i class="fa-regular fa-file-lines text-sm"></i></button>
+                  <button class="btn btn-sm join-item" @click="onStopResident(row.uuid)" title="停止" aria-label="停止">
+                    <i class="fa-solid fa-stop text-sm"></i></button>
+                  <button class="btn btn-sm btn-primary join-item" :disabled="row.status===1"
+                          @click="onStartResident(row.uuid)" title="启动" aria-label="启动"><i
+                      class="fa-solid fa-play text-sm"></i></button>
+                  <button class="btn btn-sm join-item" @click="edit(row)" title="编辑" aria-label="编辑"><i
+                      class="fa-solid fa-pen-to-square text-sm"></i></button>
+                  <button class="btn btn-sm join-item" :disabled="row.run===true"
+                          @click="removeTask(row.uuid).then(refresh)" title="删除" aria-label="删除"><i
+                      class="fa-solid fa-trash text-sm"></i></button>
+                  <button class="btn btn-sm join-item" :disabled="!logMapById[row.uuid]?.hasLog" @click="viewLog(row)"
+                          :title="logMapById[row.uuid]?.hasLog ? (logMapById[row.uuid]?.logPath ? '日志(文件)' : '日志(内存)') : '日志(未开启)'"
+                          aria-label="查看日志"><i class="fa-regular fa-file-lines text-sm"></i></button>
                 </div>
               </td>
             </tr>
@@ -249,7 +298,7 @@ onUnmounted(() => {
       <div>
         <h2 class="text-lg font-semibold mb-2">定时任务</h2>
         <div class="overflow-x-auto">
-          <table class="table  table-sm border border-base-300 rounded-lg">
+          <table class="table border border-base-300 rounded-lg">
             <thead>
             <tr>
               <th>JobName</th>
@@ -260,18 +309,27 @@ onUnmounted(() => {
             <tbody>
             <tr v-for="row in scheduled" :key="row.uuid">
               <td class="truncate max-w-[14rem] sm:max-w-[18rem]">{{ row.jobName }}</td>
-              <td class="whitespace-nowrap"><span class="text-[10px] sm:text-sm"
-                                                  :class="row.run ? 'badge badge-success badge-sm whitespace-nowrap' : 'badge badge-sm whitespace-nowrap'">{{
+              <td class="whitespace-nowrap"><span
+                  :class="row.run ? 'badge badge-success badge-sm whitespace-nowrap' : 'badge badge-sm whitespace-nowrap'">{{
                   row.run ? '开启' : '关闭'
                 }}</span></td>
               <td>
-                <div class="join">
-                  <button class="btn btn-sm join-item" :disabled="!row.run" @click="closeScheduled(row.uuid)" title="关闭定时" aria-label="关闭定时"><i class="fa-solid fa-toggle-off text-sm"></i></button>
-                  <button class="btn btn-sm btn-primary join-item" :disabled="row.run" @click="openScheduled(row.uuid)" title="开启定时" aria-label="开启定时"><i class="fa-solid fa-toggle-on text-sm"></i></button>
-                  <button class="btn btn-sm join-item" @click="runTask(row.uuid).then(refresh)" title="运行一次" aria-label="运行一次"><i class="fa-solid fa-play text-sm"></i></button>
-                  <button class="btn btn-sm join-item" @click="edit(row)" title="编辑" aria-label="编辑"><i class="fa-solid fa-pen-to-square text-sm"></i></button>
-                  <button class="btn btn-sm join-item" :disabled="row.run===true" @click="removeTask(row.uuid).then(refresh)" title="删除" aria-label="删除"><i class="fa-solid fa-trash text-sm"></i></button>
-                  <button class="btn btn-sm join-item" :disabled="!logMapById[row.uuid]?.hasLog" @click="viewLog(row)" :title="logMapById[row.uuid]?.hasLog ? (logMapById[row.uuid]?.logPath ? '日志(文件)' : '日志(内存)') : '日志(未开启)'" aria-label="查看日志"><i class="fa-regular fa-file-lines text-sm"></i></button>
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" class="toggle toggle-sm " :checked="row.run"
+                         @change="(e:any) => e.target.checked ? openScheduled(row.uuid) : closeScheduled(row.uuid)"
+                         :title="row.run ? '关闭定时' : '开启定时'" :aria-label="row.run ? '关闭定时' : '开启定时'"/>
+                  <div class="join">
+                    <button class="btn btn-sm join-item" @click="runTask(row.uuid).then(refresh)" title="运行一次"
+                            aria-label="运行一次"><i class="fa-solid fa-play text-sm"></i></button>
+                    <button class="btn btn-sm join-item" @click="edit(row)" title="编辑" aria-label="编辑"><i
+                        class="fa-solid fa-pen-to-square text-sm"></i></button>
+                    <button class="btn btn-sm join-item" :disabled="row.run===true"
+                            @click="removeTask(row.uuid).then(refresh)" title="删除" aria-label="删除"><i
+                        class="fa-solid fa-trash text-sm"></i></button>
+                    <button class="btn btn-sm join-item" :disabled="!logMapById[row.uuid]?.hasLog" @click="viewLog(row)"
+                            :title="logMapById[row.uuid]?.hasLog ? (logMapById[row.uuid]?.logPath ? '日志(文件)' : '日志(内存)') : '日志(未开启)'"
+                            aria-label="查看日志"><i class="fa-regular fa-file-lines text-sm"></i></button>
+                  </div>
                 </div>
               </td>
             </tr>
@@ -313,8 +371,10 @@ onUnmounted(() => {
               :disabled="model.readonly"/></div>
         </div>
         <div class="modal-action">
-          <button class="btn" @click="onPositiveClick" :disabled="model.readonly" title="保存" aria-label="保存"><i class="fa-solid fa-floppy-disk text-xl"></i></button>
-          <button class="btn" @click="showModal=false" title="关闭" aria-label="关闭"><i class="fa-solid fa-xmark text-xl"></i></button>
+          <button class="btn" @click="onPositiveClick" :disabled="model.readonly" title="保存" aria-label="保存"><i
+              class="fa-solid fa-floppy-disk text-xl"></i></button>
+          <button class="btn" @click="showModal=false" title="关闭" aria-label="关闭"><i
+              class="fa-solid fa-xmark text-xl"></i></button>
         </div>
       </div>
     </div>
@@ -322,11 +382,14 @@ onUnmounted(() => {
     <div v-if="showLogModal" class="modal modal-open">
       <div class="modal-box w-11/12 max-w-2xl">
         <h3 class="font-bold text-lg">日志查看</h3>
-        <div class="py-2">来源: {{ logOrigin || '-' }} | 路径: {{ logInfo.logPath || '-' }} | 大小: {{ logInfo.size }} | 更新时间: {{ logInfo.modTime || '-' }}</div>
+        <div class="py-2">来源: {{ logOrigin || '-' }} | 路径: {{ logInfo.logPath || '-' }} | 大小: {{ logInfo.size }} |
+          更新时间: {{ logInfo.modTime || '-' }}
+        </div>
         <div class="flex items-center gap-2 mb-2">
           <label class="label cursor-pointer">
             <span class="label-text">实时滚动</span>
-            <input type="checkbox" class="toggle toggle-sm" v-model="isStreaming" @change="isStreaming ? startStreaming() : stopStreaming()"/>
+            <input type="checkbox" class="toggle toggle-sm" v-model="isStreaming"
+                   @change="isStreaming ? startStreaming() : stopStreaming()"/>
           </label>
           <label class="label cursor-pointer">
             <span class="label-text">自动滚动</span>
@@ -336,7 +399,12 @@ onUnmounted(() => {
         <pre id="log-view-pre" class="max-h-[420px] overflow-auto bg-black text-gray-100 p-3 rounded font-mono text-sm">{{
             logContent
           }}</pre>
-        <div class="modal-action"><button class="btn" :disabled="!logInfo.logPath" @click="downloadLog" title="下载" aria-label="下载"><i class="fa-solid fa-download text-xl"></i></button><button class="btn" @click="showLogModal=false; stopStreaming()" title="关闭" aria-label="关闭"><i class="fa-solid fa-xmark text-xl"></i></button></div>
+        <div class="modal-action">
+          <button class="btn" :disabled="!logInfo.logPath" @click="downloadLog" title="下载" aria-label="下载"><i
+              class="fa-solid fa-download text-xl"></i></button>
+          <button class="btn" @click="showLogModal=false; stopStreaming()" title="关闭" aria-label="关闭"><i
+              class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
       </div>
     </div>
   </div>
