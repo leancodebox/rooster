@@ -51,6 +51,14 @@ func ServeRun() *http.Server {
 	static, _ := fs.Sub(assert.GetActorV3Fs(), path.Join("static", "dist"))
 	actV3.StaticFS("", http.FS(static))
 	api := r.Group("api")
+	go func() {
+		t := time.NewTicker(5 * time.Minute)
+		defer t.Stop()
+		for {
+			<-t.C
+			jobmanager.TrimMemLogs(1*time.Hour, 16<<20)
+		}
+	}()
 	api.GET("/home-path", func(c *gin.Context) {
 		h := ""
 		if v, err := os.UserHomeDir(); err == nil {

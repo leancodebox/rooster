@@ -216,6 +216,7 @@ func RemoveTask(job JobStatusShow) error {
 			}
 			needFlush = true
 			jobConfigV2.TaskList = append(jobConfigV2.TaskList[0:i], jobConfigV2.TaskList[i+1:]...)
+			ClearMemLog(job.UUID)
 			removed = true
 			break
 		}
