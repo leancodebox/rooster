@@ -29,6 +29,7 @@ const isStreaming = ref(false)
 const autoScroll = ref(true)
 let logTimer: any = 0
 let evt: EventSource | null = null
+const currentJob = ref<any>(null)
 const appRunTime = ref({start: '', runTime: ''})
 const defaultLogDir = ref('')
 const model = ref(getInitData(1))
@@ -64,6 +65,7 @@ async function viewLog(row: any) {
   isStreaming.value = false
   clearInterval(logTimer)
   if (evt) { evt.close(); evt = null }
+  currentJob.value = row
   if (!logInfo.value.hasLog) {
     logContent.value = '未开启日志或日志暂无内容'
   } else {
@@ -71,10 +73,8 @@ async function viewLog(row: any) {
     logContent.value = resp.data.content || ''
   }
   showLogModal.value = true
-  if (logInfo.value.hasLog) {
-    isStreaming.value = true
-    startStreaming()
-  }
+  isStreaming.value = true
+  startStreaming()
 }
 
 async function downloadLog() {
@@ -94,20 +94,29 @@ function scrollToBottom() {
 }
 
 function startStreaming() {
-  if (!logInfo.value.hasLog) return
   isStreaming.value = true
   clearInterval(logTimer)
   if (evt) { evt.close(); evt = null }
-  if (logInfo.value.logPath) {
-    evt = new EventSource(`/api/job-log-stream?jobId=${encodeURIComponent(logInfo.value.uuid)}`)
+  const useFile = !!(currentJob.value && currentJob.value.options && currentJob.value.options.outputType === 2 && currentJob.value.options.outputPath)
+  if (useFile) {
+    evt = new EventSource(`/api/job-log-stream?jobId=${encodeURIComponent(currentJob.value.uuid)}`)
     evt.onmessage = (e) => {
       logContent.value += e.data + '\n'
       scrollToBottom()
     }
-    evt.onerror = () => {}
+    evt.onerror = () => {
+      if (evt) { evt.close(); evt = null }
+      clearInterval(logTimer)
+      logTimer = setInterval(async () => {
+        const resp = await getJobLog(currentJob.value.uuid, 200, 0)
+        const content = resp.data.content || ''
+        logContent.value = content
+        scrollToBottom()
+      }, 1000)
+    }
   } else {
     logTimer = setInterval(async () => {
-      const resp = await getJobLog(logInfo.value.uuid, 200, 0)
+      const resp = await getJobLog(currentJob.value.uuid, 200, 0)
       const content = resp.data.content || ''
       logContent.value = content
       scrollToBottom()

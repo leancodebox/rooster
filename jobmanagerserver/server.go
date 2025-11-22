@@ -272,6 +272,9 @@ func ServeRun() *http.Server {
 
 	// logs: stream (SSE)
 	api.GET("/job-log-stream", func(c *gin.Context) {
+		defer func() {
+			slog.Info("停止滚动")
+		}()
 		c.Writer.Header().Set("Content-Type", "text/event-stream")
 		c.Writer.Header().Set("Cache-Control", "no-cache")
 		c.Writer.Header().Set("Connection", "keep-alive")
