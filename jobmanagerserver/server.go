@@ -16,9 +16,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/leancodebox/rooster/actor"
-	"github.com/leancodebox/rooster/actorv2"
-	"github.com/leancodebox/rooster/actorv3"
+	"github.com/leancodebox/rooster/assert"
 	"github.com/leancodebox/rooster/jobmanager"
 	"github.com/leancodebox/rooster/jobmanagerserver/serverinfo"
 )
@@ -49,12 +47,8 @@ func ServeRun() *http.Server {
 	r.NoRoute(func(c *gin.Context) {
 		c.Redirect(http.StatusTemporaryRedirect, "/actor")
 	})
-	act := r.Group("actor")
-	act.StaticFS("", PFilSystem("./dist", actor.GetActorFs()))
-	actV2 := r.Group("actor-v2")
-	actV2.StaticFS("", PFilSystem("./v2", actorv2.GetActorV2Fs()))
-	actV3 := r.Group("actor-v3")
-	actV3.StaticFS("", PFilSystem("./v3", actorv3.GetActorV3Fs()))
+	actV3 := r.Group("actor")
+	actV3.StaticFS("", PFilSystem("./v3", assert.GetActorV3Fs()))
 	api := r.Group("api")
 	api.GET("/job-list", func(c *gin.Context) {
 		all := jobmanager.JobList()

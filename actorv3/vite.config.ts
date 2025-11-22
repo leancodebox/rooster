@@ -4,8 +4,13 @@ import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/actor-v3/',
+  base: '/actor/',
   plugins: [tailwindcss(), vue()],
+    build: {
+        outDir: '../assert/static/dist',
+        manifest: true, // 生成 manifest.json
+        emptyOutDir: true
+    },
    server: {
         // 如果使用docker-compose开发模式，设置为false
         proxy: {

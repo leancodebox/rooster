@@ -1,5 +1,7 @@
 @import "tailwindcss";
-@plugin "daisyui";
+@plugin "daisyui" {
+    themes: corporate --default;
+}
 
 @source "./index.html";
 @source "./src/**/*.{vue,js,ts,jsx,tsx}";
