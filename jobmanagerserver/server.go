@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/leancodebox/rooster/assert"
+	"github.com/leancodebox/rooster/assets"
 	"github.com/leancodebox/rooster/jobmanager"
 )
 
@@ -45,7 +45,7 @@ func ServeRun() *http.Server {
 		c.Redirect(http.StatusTemporaryRedirect, "/actor")
 	})
 	actV3 := r.Group("actor")
-	static, err := fs.Sub(assert.GetActorV3Fs(), path.Join("static", "dist"))
+	static, err := fs.Sub(assets.GetActorV3Fs(), path.Join("static", "dist"))
 	if err == nil {
 		actV3.StaticFS("", http.FS(static))
 	} else {

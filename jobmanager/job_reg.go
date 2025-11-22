@@ -36,7 +36,7 @@ const (
 	Running
 )
 
-var jobConfigV2 JobConfigV2
+var jobConfigV2 JobConfig
 
 func RegV2(fileData []byte) {
 	err := json.Unmarshal(fileData, &jobConfigV2)
@@ -183,7 +183,6 @@ func (itself *Job) jobGuard() {
 		if !itself.Run || Closed() {
 			msg := itself.JobName + " 溜了溜了"
 			slog.Info(msg)
-			roosterSay.Send(msg)
 			break
 		}
 
@@ -194,11 +193,9 @@ func (itself *Job) jobGuard() {
 		if consecutiveFailures >= failLimit {
 			msg := itself.JobName + "程序连续3次启动失败，停止重启"
 			slog.Info(msg)
-			roosterSay.Send(msg)
 			break
 		} else {
 			msg := itself.JobName + "程序终止尝试重新运行"
-			roosterSay.Send(msg)
 			slog.Info(msg)
 			var maxDelay = 16
 			calculatedDelay := 1 << uint(consecutiveFailures)
@@ -326,7 +323,7 @@ func RegByUserConfig() error {
 		RegV2(b)
 		return nil
 	} else {
-		var tmp JobConfigV2
+		var tmp JobConfig
 		if json.Unmarshal(fileData, &tmp) != nil {
 			def := generateDefaultJobConfig()
 			b, _ := json.MarshalIndent(def, "", "  ")
@@ -391,8 +388,9 @@ func execAction(job *Job) {
 			os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		if err != nil {
 			slog.Info(err.Error())
+		} else {
+			defer logFile.Close()
 		}
-		defer logFile.Close()
 		out, errw := buildWriters(job.UUID, logFile)
 		cmd.Stdout = out
 		cmd.Stderr = errw
@@ -426,7 +424,7 @@ func (itself *Job) JobInit() error {
 	}
 	return errors.New("程序运行中")
 }
-func generateDefaultJobConfig() JobConfigV2 {
+func generateDefaultJobConfig() JobConfig {
 	shellLoop := "while true; do echo 'rooster'; sleep 1; done"
 	tick := "echo 'tick'"
 	if runtime.GOOS == "windows" {
@@ -454,7 +452,7 @@ func generateDefaultJobConfig() JobConfigV2 {
 		Spec:    "* * * * *",
 		Options: RunOptions{OutputType: OutputTypeFile, OutputPath: logDir, MaxFailures: 5},
 	}
-	return JobConfigV2{
+	return JobConfig{
 		TaskList: []*Job{resident, scheduled},
 		Config: BaseConfig{Dashboard: struct {
 			Port int `json:"port"`

@@ -29,7 +29,7 @@ func TestGetResidentScheduled(t *testing.T) {
 }
 
 func TestRegV2_WithJSON(t *testing.T) {
-	conf := JobConfigV2{
+	conf := JobConfig{
 		TaskList: []*Job{
 			{UUID: generateUUID(), JobName: "res", Type: JobTypeResident, Run: false, BinPath: "/bin/echo ok"},
 			{UUID: generateUUID(), JobName: "sch", Type: JobTypeScheduled, Run: true, Spec: "* * * * *", BinPath: "/bin/echo ok"},

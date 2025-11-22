@@ -33,8 +33,7 @@ func buildCmdWithCtx(ctx context.Context, job *Job) *exec.Cmd {
 	shell := resolveShell(job)
 	fullCommand := job.BinPath
 	args := []string{"-lc", fullCommand}
-	slog.Info(shell)
-	slog.Info(strings.Join(args, " "))
+	slog.Info("command", "bin", shell, "args", strings.Join(args, " "))
 	cmd := exec.CommandContext(ctx, shell, args...)
 	HideWindows(cmd)
 	cmd.Env = loadUnixEnv(shell)

@@ -27,7 +27,7 @@ func (d RunStatus) String() string {
 const maxExecutionTime = 10 * time.Second
 const maxConsecutiveFailures = 3
 
-// 输出类型定义
+// OutputType 输出类型定义
 type OutputType int
 
 const (
@@ -77,11 +77,6 @@ type Job struct {
 	LastDuration time.Duration
 }
 
-// IsRun 返回任务是否处于运行状态
-func (itself *Job) IsRun() bool {
-	return itself.Run
-}
-
 // BaseConfig 为全局配置
 type BaseConfig struct {
 	Dashboard struct {
@@ -90,14 +85,14 @@ type BaseConfig struct {
 	DefaultOptions RunOptions `json:"defaultOptions"` // 运行选项
 }
 
-// JobConfigV2 是任务列表与配置的组合
-type JobConfigV2 struct {
+// JobConfig 是任务列表与配置的组合
+type JobConfig struct {
 	TaskList []*Job     `json:"taskList"`
 	Config   BaseConfig `json:"config"`
 }
 
 // GetResidentTask 返回常驻任务列表
-func (itself *JobConfigV2) GetResidentTask() []*Job {
+func (itself *JobConfig) GetResidentTask() []*Job {
 	var r []*Job
 	for _, item := range itself.TaskList {
 		if item.Type == JobTypeResident {
@@ -108,7 +103,7 @@ func (itself *JobConfigV2) GetResidentTask() []*Job {
 }
 
 // GetScheduledTask 返回定时任务列表
-func (itself *JobConfigV2) GetScheduledTask() []*Job {
+func (itself *JobConfig) GetScheduledTask() []*Job {
 	var r []*Job
 	for _, item := range itself.TaskList {
 		if item.Type == JobTypeScheduled {
