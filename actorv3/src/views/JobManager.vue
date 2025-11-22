@@ -47,6 +47,28 @@ async function refresh() {
   scheduled.value = data.value.filter((x) => x.type === 2)
 }
 
+function confirmStatus(jobId: string, check: (row: any) => boolean, retries = 10, interval = 300) {
+  let count = 0
+  const h = setInterval(async () => {
+    await refresh()
+    const row = data.value.find((x: any) => x.uuid === jobId)
+    if (row && check(row)) { clearInterval(h) }
+    else if (++count >= retries) { clearInterval(h) }
+  }, interval)
+}
+
+async function onStopResident(jobId: string) {
+  await stopJob(jobId)
+  await refresh()
+  confirmStatus(jobId, (row) => row.status === 0)
+}
+
+async function onStartResident(jobId: string) {
+  await runJob(jobId)
+  await refresh()
+  confirmStatus(jobId, (row) => row.status === 1)
+}
+
 onMounted(() => { refresh(); timer = setInterval(() => { runInfo().then((r: any) => { appRunTime.value = { runTime: r.data.runTime, start: r.data.start } }) }, 1000) })
 onUnmounted(() => { clearInterval(timer) })
 </script>
@@ -77,8 +99,8 @@ onUnmounted(() => { clearInterval(timer) })
                   <td class="whitespace-nowrap"><span class="text-[10px] sm:text-xs" :class="row.status === 1 ? 'badge badge-success badge-sm whitespace-nowrap' : 'badge badge-warning badge-sm whitespace-nowrap'">{{ row.status === 1 ? '运行' : '暂停' }}</span></td>
                   <td>
                     <div class="flex flex-wrap gap-1 sm:join">
-                      <button class="btn btn-xs join-item" @click="stopJob(row.uuid).then(refresh)">停止</button>
-                      <button class="btn btn-xs btn-primary join-item" :disabled="row.status===1" @click="runJob(row.uuid).then(refresh)">启动</button>
+                      <button class="btn btn-xs join-item" @click="onStopResident(row.uuid)">停止</button>
+                      <button class="btn btn-xs btn-primary join-item" :disabled="row.status===1" @click="onStartResident(row.uuid)">启动</button>
                       <button class="btn btn-xs join-item" @click="edit(row)">编辑</button>
                       <button class="btn btn-xs join-item" :disabled="row.status===1" @click="removeTask(row.uuid).then(refresh)">删除</button>
                       <button class="btn btn-xs join-item" :disabled="!hasLogById[row.uuid]" @click="viewLog(row)">{{ hasLogById[row.uuid] ? '日志' : '日志(未开启)' }}</button>
@@ -102,7 +124,7 @@ onUnmounted(() => { clearInterval(timer) })
                   <td class="whitespace-nowrap"><span class="text-[10px] sm:text-xs" :class="row.run ? 'badge badge-success badge-sm whitespace-nowrap' : 'badge badge-sm whitespace-nowrap'">{{ row.run ? '开启' : '关闭' }}</span></td>
                   <td>
                     <div class="flex flex-wrap gap-1 sm:join">
-                      <button class="btn btn-xs join-item" @click="stopJob(row.uuid).then(refresh)">停止</button>
+                      <button class="btn btn-xs join-item" @click="onStopResident(row.uuid)">停止</button>
                       <button class="btn btn-xs btn-primary join-item" @click="runTask(row.uuid).then(refresh)">运行</button>
                       <button class="btn btn-xs join-item" @click="edit(row)">编辑</button>
                       <button class="btn btn-xs join-item" :disabled="row.status===1" @click="removeTask(row.uuid).then(refresh)">删除</button>
