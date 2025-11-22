@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/theme"
 
 	"github.com/leancodebox/rooster/assets"
 	"github.com/leancodebox/rooster/jobmanager"
@@ -78,7 +79,8 @@ func main() {
 				}
 			}
 		}
-		desk.SetSystemTrayIcon(assets.GetTrayIcon())
+
+		desk.SetSystemTrayIcon(theme.ListIcon())
 
 		m := fyne.NewMenu("rooster-desktop",
 			list...,

@@ -11,7 +11,8 @@ import {
   runTask,
   saveTask,
   stopJob,
-  getHomePath
+  getHomePath,
+  runOpenCloseTask
 } from '../request/remote'
 
 const hasLogById = ref<Record<string, boolean>>({}) // 兼容旧用法
@@ -52,7 +53,7 @@ async function onPositiveClick() {
 }
 
 function edit(row: any) {
-  model.value = {...row, edit: true, readonly: row.status === 1};
+  model.value = {...row, edit: true, readonly: row.run === true};
   showModal.value = true
 }
 
@@ -70,6 +71,10 @@ async function viewLog(row: any) {
     logContent.value = resp.data.content || ''
   }
   showLogModal.value = true
+  if (logInfo.value.hasLog) {
+    isStreaming.value = true
+    startStreaming()
+  }
 }
 
 async function downloadLog() {
@@ -156,6 +161,15 @@ async function onStartResident(jobId: string) {
   confirmStatus(jobId, (row) => row.status === 1)
 }
 
+async function openScheduled(jobId: string) {
+  await runOpenCloseTask(jobId, true)
+  await refresh()
+}
+async function closeScheduled(jobId: string) {
+  await runOpenCloseTask(jobId, false)
+  await refresh()
+}
+
 onMounted(async () => {
   refresh();
   try {
@@ -214,7 +228,7 @@ onUnmounted(() => {
                   <button class="btn btn-sm join-item" @click="onStopResident(row.uuid)" title="停止" aria-label="停止"><i class="fa-solid fa-stop text-sm"></i></button>
                   <button class="btn btn-sm btn-primary join-item" :disabled="row.status===1" @click="onStartResident(row.uuid)" title="启动" aria-label="启动"><i class="fa-solid fa-play text-sm"></i></button>
                   <button class="btn btn-sm join-item" @click="edit(row)" title="编辑" aria-label="编辑"><i class="fa-solid fa-pen-to-square text-sm"></i></button>
-                  <button class="btn btn-sm join-item" :disabled="row.status===1" @click="removeTask(row.uuid).then(refresh)" title="删除" aria-label="删除"><i class="fa-solid fa-trash text-sm"></i></button>
+                  <button class="btn btn-sm join-item" :disabled="row.run===true" @click="removeTask(row.uuid).then(refresh)" title="删除" aria-label="删除"><i class="fa-solid fa-trash text-sm"></i></button>
                   <button class="btn btn-sm join-item" :disabled="!logMapById[row.uuid]?.hasLog" @click="viewLog(row)" :title="logMapById[row.uuid]?.hasLog ? (logMapById[row.uuid]?.logPath ? '日志(文件)' : '日志(内存)') : '日志(未开启)'" aria-label="查看日志"><i class="fa-regular fa-file-lines text-sm"></i></button>
                 </div>
               </td>
@@ -243,10 +257,11 @@ onUnmounted(() => {
                 }}</span></td>
               <td>
                 <div class="join">
-                  <button class="btn btn-sm join-item" @click="onStopResident(row.uuid)" title="停止" aria-label="停止"><i class="fa-solid fa-stop text-sm"></i></button>
-                  <button class="btn btn-sm btn-primary join-item" @click="runTask(row.uuid).then(refresh)" title="运行" aria-label="运行"><i class="fa-solid fa-play text-sm"></i></button>
+                  <button class="btn btn-sm join-item" :disabled="!row.run" @click="closeScheduled(row.uuid)" title="关闭定时" aria-label="关闭定时"><i class="fa-solid fa-toggle-off text-sm"></i></button>
+                  <button class="btn btn-sm btn-primary join-item" :disabled="row.run" @click="openScheduled(row.uuid)" title="开启定时" aria-label="开启定时"><i class="fa-solid fa-toggle-on text-sm"></i></button>
+                  <button class="btn btn-sm join-item" @click="runTask(row.uuid).then(refresh)" title="运行一次" aria-label="运行一次"><i class="fa-solid fa-play text-sm"></i></button>
                   <button class="btn btn-sm join-item" @click="edit(row)" title="编辑" aria-label="编辑"><i class="fa-solid fa-pen-to-square text-sm"></i></button>
-                  <button class="btn btn-sm join-item" :disabled="row.status===1" @click="removeTask(row.uuid).then(refresh)" title="删除" aria-label="删除"><i class="fa-solid fa-trash text-sm"></i></button>
+                  <button class="btn btn-sm join-item" :disabled="row.run===true" @click="removeTask(row.uuid).then(refresh)" title="删除" aria-label="删除"><i class="fa-solid fa-trash text-sm"></i></button>
                   <button class="btn btn-sm join-item" :disabled="!logMapById[row.uuid]?.hasLog" @click="viewLog(row)" :title="logMapById[row.uuid]?.hasLog ? (logMapById[row.uuid]?.logPath ? '日志(文件)' : '日志(内存)') : '日志(未开启)'" aria-label="查看日志"><i class="fa-regular fa-file-lines text-sm"></i></button>
                 </div>
               </td>
