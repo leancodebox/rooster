@@ -286,92 +286,74 @@ func flushConfig() error {
 
 var c = cron.New()
 
+func buildCmd(job *Job) *exec.Cmd {
+    var shell string
+    var args []string
+    if runtime.GOOS == "windows" {
+        shell = "cmd.exe"
+        args = append([]string{"/C", job.BinPath}, job.Params...)
+    } else {
+        shell = os.Getenv("SHELL")
+        if shell == "" {
+            shell = "/bin/bash"
+        }
+        fullCommand := job.BinPath
+        if len(job.Params) > 0 {
+            fullCommand += " " + strings.Join(job.Params, " ")
+        }
+        args = []string{"-l", "-c", fullCommand}
+    }
+    cmd := exec.Command(shell, args...)
+    HideWindows(cmd)
+    cmd.Env = os.Environ()
+    cmd.Dir = job.Dir
+    cmd.Stdin = os.Stdin
+    cmd.Stdout = os.Stdout
+    cmd.Stderr = os.Stderr
+    return cmd
+}
+
 func (itself *Job) RunOnce() error {
-	if itself.runOnceLock.TryLock() {
-		go func(job Job) {
-			defer itself.runOnceLock.Unlock()
-			execAction(job)
-		}(*itself)
-		return nil
-	}
-	return errors.New("上次手动运行尚未结束")
+    if itself.runOnceLock.TryLock() {
+        go func(job Job) {
+            defer itself.runOnceLock.Unlock()
+            execAction(job)
+        }(*itself)
+        return nil
+    }
+    return errors.New("上次手动运行尚未结束")
 }
 
 func execAction(job Job) {
-	var shell string
-	var args []string
-	if runtime.GOOS == "windows" {
-		shell = "cmd.exe"
-		args = append([]string{"/C", job.BinPath}, job.Params...)
-	} else {
-		shell = os.Getenv("SHELL")
-		if shell == "" {
-			shell = "/bin/bash"
-		}
-		fullCommand := job.BinPath
-		if len(job.Params) > 0 {
-			fullCommand += " " + strings.Join(job.Params, " ")
-		}
-		args = []string{"-l", "-c", fullCommand}
-	}
-	cmd := exec.Command(shell, args...)
-	cmd.Env = os.Environ()
-	cmd.Dir = job.Dir
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	HideWindows(cmd)
-	if job.Options.OutputType == OutputTypeFile && job.Options.OutputPath != "" {
-		err := os.MkdirAll(job.Options.OutputPath, os.ModePerm)
-		if err != nil {
-			slog.Info(err.Error())
-		}
-		logFile, err := os.OpenFile(filepath.Join(job.Options.OutputPath, job.JobName+"_log.txt"),
-			os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-		if err != nil {
-			slog.Info(err.Error())
-		}
-		defer logFile.Close()
-		cmd.Stdout = logFile
-		cmd.Stderr = logFile
-	}
-	cmdErr := cmd.Run()
-	if cmdErr != nil {
-		slog.Info(cmdErr.Error())
-	}
+    cmd := buildCmd(&job)
+    if job.Options.OutputType == OutputTypeFile && job.Options.OutputPath != "" {
+        err := os.MkdirAll(job.Options.OutputPath, os.ModePerm)
+        if err != nil {
+            slog.Info(err.Error())
+        }
+        logFile, err := os.OpenFile(filepath.Join(job.Options.OutputPath, job.JobName+"_log.txt"),
+            os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+        if err != nil {
+            slog.Info(err.Error())
+        }
+        defer logFile.Close()
+        cmd.Stdout = logFile
+        cmd.Stderr = logFile
+    }
+    cmdErr := cmd.Run()
+    if cmdErr != nil {
+        slog.Info(cmdErr.Error())
+    }
 }
 
 // JobInit 初始化并执行
 func (itself *Job) JobInit() error {
-	itself.confLock.Lock()
-	defer itself.confLock.Unlock()
-	if itself.cmd == nil {
-		var shell string
-		var args []string
-		if runtime.GOOS == "windows" {
-			shell = "cmd.exe"
-			args = append([]string{"/C", itself.BinPath}, itself.Params...)
-		} else {
-			shell = os.Getenv("SHELL")
-			if shell == "" {
-				shell = "/bin/bash"
-			}
-			// 将命令和参数拼接成一个完整的命令字符串
-			fullCommand := itself.BinPath
-			if len(itself.Params) > 0 {
-				fullCommand += " " + strings.Join(itself.Params, " ")
-			}
-			args = []string{"-l", "-c", fullCommand}
-		}
-		cmd := exec.Command(shell, args...)
-		HideWindows(cmd)
-		cmd.Dir = itself.Dir
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		itself.cmd = cmd
-		go itself.jobGuard()
-		return nil
-	}
-	return errors.New("程序运行中")
+    itself.confLock.Lock()
+    defer itself.confLock.Unlock()
+    if itself.cmd == nil {
+        itself.cmd = buildCmd(itself)
+        go itself.jobGuard()
+        return nil
+    }
+    return errors.New("程序运行中")
 }

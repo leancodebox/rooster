@@ -176,7 +176,7 @@ func SaveTask(job JobStatusShow) error {
 				if jobItem.Run == true {
 					return errors.New("任务处于开启状态不允许修改,如需修改请先关闭")
 				}
-				if jobItem.Type != jobItem.Type {
+				if jobItem.Type != job.Type {
 					return errors.New("任务类型不允许修改")
 				}
 				jobItem.JobName = job.JobName
