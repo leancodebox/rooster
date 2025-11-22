@@ -4,16 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"log/slog"
 	"net/http"
+	"os"
 	"path"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-    "github.com/leancodebox/rooster/actor"
-    "github.com/leancodebox/rooster/actorv2"
+	"github.com/leancodebox/rooster/actor"
+	"github.com/leancodebox/rooster/actorv2"
 	"github.com/leancodebox/rooster/jobmanager"
 	"github.com/leancodebox/rooster/jobmanagerserver/serverinfo"
 )
@@ -44,10 +48,10 @@ func ServeRun() *http.Server {
 	r.NoRoute(func(c *gin.Context) {
 		c.Redirect(http.StatusTemporaryRedirect, "/actor")
 	})
-    act := r.Group("actor")
-    act.StaticFS("", PFilSystem("./dist", actor.GetActorFs()))
-    actV2 := r.Group("actor-v2")
-    actV2.StaticFS("", PFilSystem("./v2", actorv2.GetActorV2Fs()))
+	act := r.Group("actor")
+	act.StaticFS("", PFilSystem("./dist", actor.GetActorFs()))
+	actV2 := r.Group("actor-v2")
+	actV2.StaticFS("", PFilSystem("./v2", actorv2.GetActorV2Fs()))
 	api := r.Group("api")
 	api.GET("/job-list", func(c *gin.Context) {
 		all := jobmanager.JobList()
@@ -151,6 +155,138 @@ func ServeRun() *http.Server {
 		})
 	})
 
+	// logs: list
+	api.GET("/job-log-list", func(c *gin.Context) {
+		var out []gin.H
+		for _, j := range jobmanager.JobList() {
+			hasLog := false
+			lp := ""
+			size := int64(0)
+			mt := ""
+			if j.Options.OutputType == 2 && j.Options.OutputPath != "" {
+				lp = filepath.Join(j.Options.OutputPath, j.JobName+"_log.txt")
+				if st, err := os.Stat(lp); err == nil && !st.IsDir() {
+					hasLog = true
+					size = st.Size()
+					mt = st.ModTime().Format("2006-01-02 15:04:05")
+				}
+			}
+			out = append(out, gin.H{
+				"uuid":    j.UUID,
+				"jobName": j.JobName,
+				"hasLog":  hasLog,
+				"logPath": lp,
+				"size":    size,
+				"modTime": mt,
+			})
+		}
+		c.JSON(http.StatusOK, gin.H{"message": out})
+	})
+
+	// logs: tail
+	api.GET("/job-log", func(c *gin.Context) {
+		jobId := c.Query("jobId")
+		lines := 200
+		bytes := 0
+		if v := c.Query("lines"); v != "" {
+			fmt.Sscanf(v, "%d", &lines)
+		}
+		if v := c.Query("bytes"); v != "" {
+			fmt.Sscanf(v, "%d", &bytes)
+		}
+		j, ok := getJobStatusById(jobId)
+		if !ok {
+			c.JSON(http.StatusNotFound, gin.H{"message": "jobId不存在"})
+			return
+		}
+		lp, ok := getJobLogPath(j)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "未开启文件日志或路径无效"})
+			return
+		}
+		maxBytes := 2 * 1024 * 1024
+		if bytes <= 0 {
+			bytes = 0
+		}
+		data, err := readTail(lp, lines, bytes, maxBytes)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"content": string(data)})
+	})
+
+	// logs: download
+	api.GET("/job-log-download", func(c *gin.Context) {
+		jobId := c.Query("jobId")
+		j, ok := getJobStatusById(jobId)
+		if !ok {
+			c.JSON(http.StatusNotFound, gin.H{"message": "jobId不存在"})
+			return
+		}
+		lp, ok := getJobLogPath(j)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "未开启文件日志或路径无效"})
+			return
+		}
+		c.Header("Content-Type", "text/plain; charset=utf-8")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s_log.txt\"", j.JobName))
+		c.File(lp)
+	})
+
+	// logs: stream (SSE)
+	api.GET("/job-log-stream", func(c *gin.Context) {
+		c.Writer.Header().Set("Content-Type", "text/event-stream")
+		c.Writer.Header().Set("Cache-Control", "no-cache")
+		c.Writer.Header().Set("Connection", "keep-alive")
+		jobId := c.Query("jobId")
+		j, ok := getJobStatusById(jobId)
+		if !ok {
+			c.String(http.StatusNotFound, "")
+			return
+		}
+		lp, ok := getJobLogPath(j)
+		if !ok {
+			c.String(http.StatusBadRequest, "")
+			return
+		}
+		f, err := os.Open(lp)
+		if err != nil {
+			c.String(http.StatusInternalServerError, "")
+			return
+		}
+		defer f.Close()
+		pos := int64(0)
+		if st, err := f.Stat(); err == nil {
+			pos = st.Size()
+		}
+		for {
+			if c.Request.Context().Err() != nil {
+				break
+			}
+			st, err := os.Stat(lp)
+			if err != nil {
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			size := st.Size()
+			if size < pos {
+				pos = 0
+			}
+			if size > pos {
+				_, _ = f.Seek(pos, io.SeekStart)
+				buf := make([]byte, size-pos)
+				n, _ := io.ReadFull(f, buf)
+				pos += int64(n)
+				c.Writer.Write([]byte("data: "))
+				c.Writer.Write(buf[:n])
+				c.Writer.Write([]byte("\n\n"))
+				c.Writer.Flush()
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+	})
+
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("listen: %s\n", err)
@@ -170,6 +306,68 @@ func ServeStop() {
 		slog.Info("Server Shutdown:", "err", err.Error())
 	}
 	jobmanager.StopAll()
+}
+
+func getJobStatusById(id string) (jobmanager.JobStatusShow, bool) {
+	for _, j := range jobmanager.JobList() {
+		if j.UUID == id {
+			return j, true
+		}
+	}
+	return jobmanager.JobStatusShow{}, false
+}
+
+func getJobLogPath(j jobmanager.JobStatusShow) (string, bool) {
+	if j.Options.OutputType != 2 || j.Options.OutputPath == "" {
+		return "", false
+	}
+	p := filepath.Join(j.Options.OutputPath, j.JobName+"_log.txt")
+	// safety: ensure p starts with OutputPath
+	if !strings.HasPrefix(p, j.Options.OutputPath) {
+		return "", false
+	}
+	return p, true
+}
+
+func readTail(path string, lines, bytes, maxBytes int) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if bytes > 0 {
+		if bytes > maxBytes {
+			bytes = maxBytes
+		}
+		off := st.Size() - int64(bytes)
+		if off < 0 {
+			off = 0
+		}
+		_, _ = f.Seek(off, io.SeekStart)
+		buf := make([]byte, st.Size()-off)
+		n, _ := io.ReadFull(f, buf)
+		return buf[:n], nil
+	}
+	// read lines tail
+	// naive implementation: read last maxBytes then split
+	sz := st.Size()
+	read := int64(maxBytes)
+	if read > sz {
+		read = sz
+	}
+	_, _ = f.Seek(sz-read, io.SeekStart)
+	buf := make([]byte, read)
+	n, _ := io.ReadFull(f, buf)
+	parts := strings.Split(string(buf[:n]), "\n")
+	if len(parts) <= lines {
+		return buf[:n], nil
+	}
+	tail := strings.Join(parts[len(parts)-lines-1:], "\n")
+	return []byte(tail), nil
 }
 
 type fsFunc func(name string) (fs.File, error)
@@ -226,3 +424,5 @@ func formatDuration(d time.Duration) string {
 	seconds := int64((d % time.Minute).Seconds())
 	return fmt.Sprintf("%02d天%02d时%02d分%02d秒", day, hour, minute, seconds)
 }
+
+// moved route handlers inside ServeRun earlier

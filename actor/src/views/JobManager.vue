@@ -20,7 +20,7 @@ import {
   useMessage
 } from "naive-ui"
 import {h, onMounted, onUnmounted, ref} from "vue";
-import {getJobList, removeTask, runInfo, runJob, runOpenCloseTask, runTask, saveTask, stopJob} from "@/request/remote"
+import {getJobList, removeTask, runInfo, runJob, runOpenCloseTask, runTask, saveTask, stopJob, restartJob, getJobLogList, getJobLog, downloadJobLog} from "@/request/remote"
 import {ArrowDownCircleOutline, ArrowUpCircleOutline} from '@vicons/ionicons5'
 
 const message = useMessage()
@@ -130,8 +130,22 @@ const columns = [
           },
           {default: () => "编辑"}
       )
+      const logBtn = h(NButton, {
+        type: "default",
+        size: "small",
+        ghost: true,
+        onClick: () => viewLog(row)
+      }, { default: () => "日志" })
+      jobButton.push(logBtn)
       jobButton.push(editButton)
       jobButton.push(rm)
+      const logBtn2 = h(NButton, {
+        type: "default",
+        size: "small",
+        ghost: true,
+        onClick: () => viewLog(row)
+      }, { default: () => "日志" })
+      taskButton.push(logBtn2)
       taskButton.push(editButton)
       taskButton.push(rm)
       if (row.type === 1) {
@@ -155,6 +169,9 @@ onMounted(() => {
 })
 
 const showModal = ref(false);
+const showLogModal = ref(false);
+const logContent = ref("")
+const logInfo = ref<any>({ hasLog: false, logPath: "", size: 0, modTime: "" })
 const rules = {}
 
 function getInitData(type: any) {
@@ -213,6 +230,19 @@ function edit(row: any) {
     edit: true
   }
   showModal.value = true
+}
+
+async function viewLog(row: any) {
+  const list = await getJobLogList()
+  const item = (list.data.message as any[]).find((x) => x.uuid === row.uuid)
+  logInfo.value = item || { hasLog: false }
+  if (!logInfo.value.hasLog) {
+    logContent.value = "未开启文件日志或日志文件不存在"
+  } else {
+    const resp = await getJobLog(row.uuid, 200, 0)
+    logContent.value = resp.data.content
+  }
+  showLogModal.value = true
 }
 
 async function getData(show = 1) {
@@ -382,5 +412,23 @@ onUnmounted(() => {
         </n-input>
       </n-form-item>
     </n-form>
+  </n-modal>
+
+  <n-modal
+      v-model:show="showLogModal"
+      style="width: 800px"
+      :mask-closable="true"
+      preset="dialog"
+      title="日志查看"
+      positive-text="下载"
+      negative-text="关闭"
+      @positive-click="() => downloadJobLog(logInfo.value.uuid).then(r => { const url = URL.createObjectURL(r.data); const a = document.createElement('a'); a.href = url; a.download = (logInfo.value.logPath || 'log.txt'); a.click(); URL.revokeObjectURL(url) })"
+      @negative-click="() => { showLogModal.value = false }"
+      :style="{paddingTop:'20px'}"
+  >
+    <n-card>
+      <div>路径: {{ logInfo.logPath || '-' }} | 大小: {{ logInfo.size }} | 更新时间: {{ logInfo.modTime || '-' }}</div>
+      <pre style="max-height: 400px; overflow: auto; background: #111; color: #eee; padding: 12px">{{ logContent }}</pre>
+    </n-card>
   </n-modal>
 </template>

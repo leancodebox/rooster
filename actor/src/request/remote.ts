@@ -77,3 +77,18 @@ export function runInfo() {
     return instanceAxios.get("run-info", {
     })
 }
+
+export function getJobLogList() {
+    return instanceAxios.get("job-log-list")
+}
+
+export function getJobLog(jobId: any, lines = 200, bytes = 0) {
+    const p: any = { jobId }
+    if (lines) p.lines = lines
+    if (bytes) p.bytes = bytes
+    return instanceAxios.get("job-log", { params: p })
+}
+
+export function downloadJobLog(jobId: any) {
+    return instanceAxios.get("job-log-download", { params: { jobId }, responseType: "blob" })
+}
