@@ -51,6 +51,13 @@ func ServeRun() *http.Server {
 	static, _ := fs.Sub(assert.GetActorV3Fs(), path.Join("static", "dist"))
 	actV3.StaticFS("", http.FS(static))
 	api := r.Group("api")
+	api.GET("/home-path", func(c *gin.Context) {
+		h := ""
+		if v, err := os.UserHomeDir(); err == nil {
+			h = v
+		}
+		c.JSON(http.StatusOK, gin.H{"home": h})
+	})
 	api.GET("/job-list", func(c *gin.Context) {
 		all := jobmanager.JobList()
 		c.JSON(http.StatusOK, gin.H{
@@ -133,9 +140,20 @@ func ServeRun() *http.Server {
 	})
 
 	api.POST("/remove-task", func(c *gin.Context) {
-		var params jobmanager.JobStatusShow
-		_ = c.ShouldBind(&params)
-		err := jobmanager.RemoveTask(params)
+		var req struct {
+			UUID  string `json:"uuid"`
+			JobId string `json:"jobId"`
+		}
+		_ = c.ShouldBind(&req)
+		id := req.UUID
+		if id == "" {
+			id = req.JobId
+		}
+		if id == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "uuid/jobId缺失"})
+			return
+		}
+		err := jobmanager.RemoveTask(jobmanager.JobStatusShow{UUID: id})
 		msg := "success"
 		if err != nil {
 			msg = err.Error()
@@ -169,6 +187,13 @@ func ServeRun() *http.Server {
 					mt = st.ModTime().Format("2006-01-02 15:04:05")
 				}
 			}
+			if !hasLog {
+				if sz, lt, ok := jobmanager.GetMemLogStat(j.UUID); ok {
+					hasLog = true
+					size = sz
+					mt = lt.Format("2006-01-02 15:04:05")
+				}
+			}
 			out = append(out, gin.H{
 				"uuid":    j.UUID,
 				"jobName": j.JobName,
@@ -198,20 +223,24 @@ func ServeRun() *http.Server {
 			return
 		}
 		lp, ok := getJobLogPath(j)
-		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "未开启文件日志或路径无效"})
-			return
-		}
 		maxBytes := 2 * 1024 * 1024
 		if bytes <= 0 {
 			bytes = 0
 		}
-		data, err := readTail(lp, lines, bytes, maxBytes)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		if ok {
+			data, err := readTail(lp, lines, bytes, maxBytes)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"content": string(data)})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"content": string(data)})
+		if data, ok := jobmanager.ReadMemTail(j.UUID, lines, bytes, maxBytes); ok {
+			c.JSON(http.StatusOK, gin.H{"content": string(data)})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"message": "未开启文件日志或日志为空"})
 	})
 
 	// logs: download

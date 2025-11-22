@@ -199,6 +199,7 @@ func SaveTask(job JobStatusShow) error {
 
 func RemoveTask(job JobStatusShow) error {
 	needFlush := false
+	removed := false
 	defer func() {
 		if needFlush == true {
 			err := flushConfig()
@@ -215,8 +216,12 @@ func RemoveTask(job JobStatusShow) error {
 			}
 			needFlush = true
 			jobConfigV2.TaskList = append(jobConfigV2.TaskList[0:i], jobConfigV2.TaskList[i+1:]...)
+			removed = true
 			break
 		}
+	}
+	if !removed {
+		return errors.New("任务不存在或已删除")
 	}
 	return nil
 }

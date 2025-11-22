@@ -10,10 +10,12 @@ import {
   runJob,
   runTask,
   saveTask,
-  stopJob
+  stopJob,
+  getHomePath
 } from '../request/remote'
 
-const hasLogById = ref<Record<string, boolean>>({})
+const hasLogById = ref<Record<string, boolean>>({}) // 兼容旧用法
+const logMapById = ref<Record<string, any>>({})
 const data = ref<any[]>([])
 const resident = ref<any[]>([])
 const scheduled = ref<any[]>([])
@@ -21,14 +23,20 @@ const showModal = ref(false)
 const showLogModal = ref(false)
 const logContent = ref('')
 const logInfo = ref<any>({hasLog: false, logPath: '', size: 0, modTime: '', uuid: ''})
+const logOrigin = ref<'文件' | '内存' | ''>('')
+const isStreaming = ref(false)
+const autoScroll = ref(true)
+let logTimer: any = 0
+let evt: EventSource | null = null
 const appRunTime = ref({start: '', runTime: ''})
+const defaultLogDir = ref('')
 const model = ref(getInitData(1))
 let timer: any = 0
 
 function getInitData(type: number) {
   return {
     uuid: '', jobName: '', type, spec: '* * * * *', binPath: '', dir: '', run: false,
-    options: {maxFailures: 5, outputPath: '/tmp', outputType: 1}, edit: false, readonly: false
+    options: {maxFailures: 5, outputPath: defaultLogDir.value || '/tmp', outputType: 2}, edit: false, readonly: false
   }
 }
 
@@ -49,14 +57,17 @@ function edit(row: any) {
 }
 
 async function viewLog(row: any) {
-  const list = await getJobLogList()
-  const item = (list.data.message as any[]).find((x) => x.uuid === row.uuid)
+  const item = logMapById.value[row.uuid]
   logInfo.value = item || {hasLog: false}
+  logOrigin.value = logInfo.value.hasLog ? (logInfo.value.logPath ? '文件' : '内存') : ''
+  isStreaming.value = false
+  clearInterval(logTimer)
+  if (evt) { evt.close(); evt = null }
   if (!logInfo.value.hasLog) {
-    logContent.value = '未开启文件日志或日志文件不存在'
+    logContent.value = '未开启日志或日志暂无内容'
   } else {
-    const resp = await getJobLog(row.uuid, 200, 0);
-    logContent.value = resp.data.content
+    const resp = await getJobLog(row.uuid, 200, 0)
+    logContent.value = resp.data.content || ''
   }
   showLogModal.value = true
 }
@@ -71,13 +82,51 @@ async function downloadLog() {
   window.URL.revokeObjectURL(url)
 }
 
+function scrollToBottom() {
+  if (!autoScroll.value) return
+  const pre = document.querySelector('#log-view-pre') as HTMLElement
+  if (pre) pre.scrollTop = pre.scrollHeight
+}
+
+function startStreaming() {
+  if (!logInfo.value.hasLog) return
+  isStreaming.value = true
+  clearInterval(logTimer)
+  if (evt) { evt.close(); evt = null }
+  if (logInfo.value.logPath) {
+    evt = new EventSource(`/api/job-log-stream?jobId=${encodeURIComponent(logInfo.value.uuid)}`)
+    evt.onmessage = (e) => {
+      logContent.value += e.data + '\n'
+      scrollToBottom()
+    }
+    evt.onerror = () => {}
+  } else {
+    logTimer = setInterval(async () => {
+      const resp = await getJobLog(logInfo.value.uuid, 200, 0)
+      const content = resp.data.content || ''
+      logContent.value = content
+      scrollToBottom()
+    }, 1000)
+  }
+}
+
+function stopStreaming() {
+  isStreaming.value = false
+  clearInterval(logTimer)
+  if (evt) { evt.close(); evt = null }
+}
+
 async function refresh() {
   const resp = await getJobList();
   data.value = resp.data.message
   const logsResp = await getJobLogList();
   const logList = logsResp.data.message as any[]
   hasLogById.value = {};
-  for (const item of logList) hasLogById.value[item.uuid] = item.hasLog
+  logMapById.value = {};
+  for (const item of logList) {
+    hasLogById.value[item.uuid] = item.hasLog
+    logMapById.value[item.uuid] = item
+  }
   resident.value = data.value.filter((x) => x.type === 1)
   scheduled.value = data.value.filter((x) => x.type === 2)
 }
@@ -107,8 +156,13 @@ async function onStartResident(jobId: string) {
   confirmStatus(jobId, (row) => row.status === 1)
 }
 
-onMounted(() => {
+onMounted(async () => {
   refresh();
+  try {
+    const r = await getHomePath()
+    const h = r.data.home || ''
+    defaultLogDir.value = h ? `${h}/.roosterTaskConfig/log` : ''
+  } catch {}
   timer = setInterval(() => {
     runInfo().then((r: any) => {
       appRunTime.value = {runTime: r.data.runTime, start: r.data.start}
@@ -165,8 +219,8 @@ onUnmounted(() => {
                   <button class="btn btn-sm join-item" :disabled="row.status===1"
                           @click="removeTask(row.uuid).then(refresh)">删除
                   </button>
-                  <button class="btn btn-sm join-item" :disabled="!hasLogById[row.uuid]" @click="viewLog(row)">
-                    {{ hasLogById[row.uuid] ? '日志' : '日志(未开启)' }}
+                  <button class="btn btn-sm join-item" :disabled="!logMapById[row.uuid]?.hasLog" @click="viewLog(row)">
+                    {{ logMapById[row.uuid]?.hasLog ? (logMapById[row.uuid]?.logPath ? '日志(文件)' : '日志(内存)') : '日志(未开启)' }}
                   </button>
                 </div>
               </td>
@@ -202,8 +256,8 @@ onUnmounted(() => {
                   <button class="btn btn-sm join-item" :disabled="row.status===1"
                           @click="removeTask(row.uuid).then(refresh)">删除
                   </button>
-                  <button class="btn btn-sm join-item" :disabled="!hasLogById[row.uuid]" @click="viewLog(row)">
-                    {{ hasLogById[row.uuid] ? '日志' : '日志(未开启)' }}
+                  <button class="btn btn-sm join-item" :disabled="!logMapById[row.uuid]?.hasLog" @click="viewLog(row)">
+                    {{ logMapById[row.uuid]?.hasLog ? (logMapById[row.uuid]?.logPath ? '日志(文件)' : '日志(内存)') : '日志(未开启)' }}
                   </button>
                 </div>
               </td>
@@ -255,16 +309,21 @@ onUnmounted(() => {
     <div v-if="showLogModal" class="modal modal-open">
       <div class="modal-box w-11/12 max-w-2xl">
         <h3 class="font-bold text-lg">日志查看</h3>
-        <div class="py-2">路径: {{ logInfo.logPath || '-' }} | 大小: {{ logInfo.size }} | 更新时间:
-          {{ logInfo.modTime || '-' }}
+        <div class="py-2">来源: {{ logOrigin || '-' }} | 路径: {{ logInfo.logPath || '-' }} | 大小: {{ logInfo.size }} | 更新时间: {{ logInfo.modTime || '-' }}</div>
+        <div class="flex items-center gap-2 mb-2">
+          <label class="label cursor-pointer">
+            <span class="label-text">实时滚动</span>
+            <input type="checkbox" class="toggle toggle-sm" v-model="isStreaming" @change="isStreaming ? startStreaming() : stopStreaming()"/>
+          </label>
+          <label class="label cursor-pointer">
+            <span class="label-text">自动滚动</span>
+            <input type="checkbox" class="toggle toggle-sm" v-model="autoScroll"/>
+          </label>
         </div>
-        <pre class="max-h-[420px] overflow-auto bg-black text-gray-100 p-3 rounded font-mono text-sm">{{
+        <pre id="log-view-pre" class="max-h-[420px] overflow-auto bg-black text-gray-100 p-3 rounded font-mono text-sm">{{
             logContent
           }}</pre>
-        <div class="modal-action">
-          <button class="btn" @click="downloadLog">下载</button>
-          <button class="btn" @click="showLogModal=false">关闭</button>
-        </div>
+        <div class="modal-action"><button class="btn" :disabled="!logInfo.logPath" @click="downloadLog">下载</button><button class="btn" @click="showLogModal=false; stopStreaming()">关闭</button></div>
       </div>
     </div>
   </div>

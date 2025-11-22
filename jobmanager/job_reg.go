@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"math/rand"
 	"os"
@@ -143,8 +142,13 @@ func (itself *Job) jobGuard() {
 			slog.Info(err.Error())
 		}
 		defer logFile.Close()
-		itself.cmd.Stdout = io.MultiWriter(os.Stdout, logFile)
-		itself.cmd.Stderr = io.MultiWriter(os.Stderr, logFile)
+		out, errw := buildWriters(itself.UUID, logFile)
+		itself.cmd.Stdout = out
+		itself.cmd.Stderr = errw
+	} else {
+		out, errw := buildWriters(itself.UUID, nil)
+		itself.cmd.Stdout = out
+		itself.cmd.Stderr = errw
 	}
 	counter := 1
 	consecutiveFailures := 0
@@ -235,32 +239,13 @@ func (itself *Job) StopJob(updateStatus ...bool) {
 		itself.cancel()
 	}
 	if itself.cmd != nil && itself.cmd.Process != nil {
-		err := itself.cmd.Process.Signal(os.Interrupt)
-		if err != nil {
-			slog.Info("发送终止信号失败:", "err", err)
-		}
-
-		done := make(chan error, 1)
-		go func() {
-			done <- itself.cmd.Wait()
-		}()
-
+		_ = itself.cmd.Process.Signal(os.Interrupt)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		select {
-		case <-ctx.Done():
-			err = KillProcessGroup(itself.cmd)
-			if err != nil {
-				slog.Info("强制终止进程失败:", "err", err)
-				return
-			}
-		case err := <-done:
-			if err != nil {
-				slog.Info("进程退出错误:", "err", err)
-			}
-		}
-		itself.cmd = nil
+		<-ctx.Done()
+		_ = KillProcessGroup(itself.cmd)
 	}
+	itself.status = Stop
 }
 
 var start time.Time
@@ -390,8 +375,13 @@ func execAction(job *Job) {
 			slog.Info(err.Error())
 		}
 		defer logFile.Close()
-		cmd.Stdout = io.MultiWriter(os.Stdout, logFile)
-		cmd.Stderr = io.MultiWriter(os.Stderr, logFile)
+		out, errw := buildWriters(job.UUID, logFile)
+		cmd.Stdout = out
+		cmd.Stderr = errw
+	} else {
+		out, errw := buildWriters(job.UUID, nil)
+		cmd.Stdout = out
+		cmd.Stderr = errw
 	}
 	cmdErr := cmd.Run()
 	if cmdErr != nil {
