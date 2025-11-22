@@ -19,22 +19,30 @@ type JobStatusShow struct {
 	Spec    string     `json:"spec"`
 	Options RunOptions `json:"options"` // 运行选项
 
-	Status RunStatus `json:"status"`
+	Status       RunStatus     `json:"status"`
+	LastStart    time.Time     `json:"lastStart"`
+	LastExit     time.Time     `json:"lastExit"`
+	LastExitCode int           `json:"lastExitCode"`
+	LastDuration time.Duration `json:"lastDuration"`
 }
 
 // 类型转化
 func job2jobStatus(job Job) JobStatusShow {
 	return JobStatusShow{
-		UUID:    job.UUID,
-		JobName: job.JobName,
-		Type:    job.Type,
-		Run:     job.Run,
-		BinPath: job.BinPath,
-		Params:  job.Params,
-		Dir:     job.Dir,
-		Spec:    job.Spec,
-		Options: job.Options,
-		Status:  job.status,
+		UUID:         job.UUID,
+		JobName:      job.JobName,
+		Type:         job.Type,
+		Run:          job.Run,
+		BinPath:      job.BinPath,
+		Params:       job.Params,
+		Dir:          job.Dir,
+		Spec:         job.Spec,
+		Options:      job.Options,
+		Status:       job.status,
+		LastStart:    job.LastStart,
+		LastExit:     job.LastExit,
+		LastExitCode: job.LastExitCode,
+		LastDuration: job.LastDuration,
 	}
 }
 
@@ -119,7 +127,7 @@ func OpenCloseTask(taskId string, run bool) error {
 		}
 		entityId, err := c.AddFunc(job.Spec, func(job *Job) func() {
 			return func() {
-				execAction(*job)
+				execAction(job)
 			}
 		}(job))
 		if err != nil {

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path"
@@ -65,14 +67,13 @@ func scheduleV2(jobList []*Job) {
 		}
 		entityId, err := c.AddFunc(job.Spec, func(job *Job) func() {
 			return func() {
-				execAction(*job)
+				execAction(job)
 			}
 		}(job))
 		if err != nil {
 			slog.Error(err.Error())
 		} else {
 			job.entityId = entityId
-			job.status = Running
 			slog.Info(fmt.Sprintf("%v 加入任务", job.GetJobName()))
 		}
 	}
@@ -95,6 +96,22 @@ func (itself *Job) ConfigInit() {
 	}
 	itself.confLock = &sync.Mutex{}
 	itself.runOnceLock = &sync.Mutex{}
+	def := jobConfigV2.Config.DefaultOptions
+	if itself.Options.OutputType == 0 {
+		itself.Options.OutputType = def.OutputType
+	}
+	if itself.Options.OutputPath == "" {
+		itself.Options.OutputPath = def.OutputPath
+	}
+	if itself.Options.MaxFailures == 0 {
+		itself.Options.MaxFailures = def.MaxFailures
+	}
+	if itself.Options.MinRunSeconds == 0 {
+		itself.Options.MinRunSeconds = def.MinRunSeconds
+	}
+	if itself.Options.ShellPath == "" {
+		itself.Options.ShellPath = def.ShellPath
+	}
 }
 
 func (itself *Job) GetJobName() string {
@@ -113,16 +130,16 @@ func (itself *Job) jobGuard() {
 		if err != nil {
 			slog.Info(err.Error())
 		}
-		logFile, err := os.OpenFile(itself.Options.OutputPath+"/"+itself.JobName+"_log.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		logFile, err := os.OpenFile(filepath.Join(itself.Options.OutputPath, itself.JobName+"_log.txt"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		if err != nil {
 			slog.Info(err.Error())
 		}
 		defer logFile.Close()
-		itself.cmd.Stdout = logFile
-		itself.cmd.Stderr = logFile
+		itself.cmd.Stdout = io.MultiWriter(os.Stdout, logFile)
+		itself.cmd.Stderr = io.MultiWriter(os.Stderr, logFile)
 	}
 	counter := 1
-	consecutiveFailures := 1
+	consecutiveFailures := 0
 	for {
 		if !itself.Run {
 			slog.Info(fmt.Sprintf("%v : no Run ", itself.JobName))
@@ -132,8 +149,14 @@ func (itself *Job) jobGuard() {
 		counter += 1
 		cmdErr := itself.cmd.Start()
 		if cmdErr == nil {
+			itself.LastStart = unitStartTime
 			itself.status = Running
 			cmdErr = itself.cmd.Wait()
+			itself.LastExit = time.Now()
+			itself.LastDuration = time.Since(unitStartTime)
+			if itself.cmd.ProcessState != nil {
+				itself.LastExitCode = itself.cmd.ProcessState.ExitCode()
+			}
 			itself.status = Stop
 		}
 
@@ -141,10 +164,14 @@ func (itself *Job) jobGuard() {
 		if cmdErr != nil {
 			slog.Info(cmdErr.Error())
 		}
-		if executionTime <= maxExecutionTime {
+		threshold := maxExecutionTime
+		if itself.Options.MinRunSeconds > 0 {
+			threshold = time.Duration(itself.Options.MinRunSeconds) * time.Second
+		}
+		if executionTime <= threshold {
 			consecutiveFailures += 1
 		} else {
-			consecutiveFailures = 1
+			consecutiveFailures = 0
 		}
 
 		if !itself.Run || Closed() {
@@ -154,7 +181,11 @@ func (itself *Job) jobGuard() {
 			break
 		}
 
-		if consecutiveFailures >= max(maxConsecutiveFailures, itself.Options.MaxFailures) {
+		failLimit := maxConsecutiveFailures
+		if itself.Options.MaxFailures > 0 && itself.Options.MaxFailures > failLimit {
+			failLimit = itself.Options.MaxFailures
+		}
+		if consecutiveFailures >= failLimit {
 			msg := itself.JobName + "程序连续3次启动失败，停止重启"
 			slog.Info(msg)
 			roosterSay.Send(msg)
@@ -164,13 +195,16 @@ func (itself *Job) jobGuard() {
 			roosterSay.Send(msg)
 			slog.Info(msg)
 			var maxDelay = 16
-			calculatedDelay := maxDelay
-			if consecutiveFailures < 10 {
-				calculatedDelay = 1 << uint(consecutiveFailures)
+			calculatedDelay := 1 << uint(consecutiveFailures)
+			if calculatedDelay > maxDelay {
+				calculatedDelay = maxDelay
 			}
-			// 确保延迟不超过最大限制
-			actualDelay := time.Duration(min(calculatedDelay, maxDelay))
-			time.Sleep(actualDelay * time.Second)
+			jitter := rand.Intn(calculatedDelay/2 + 1)
+			actualDelay := calculatedDelay + jitter
+			if actualDelay > maxDelay {
+				actualDelay = maxDelay
+			}
+			time.Sleep(time.Duration(actualDelay) * time.Second)
 		}
 	}
 }
@@ -187,14 +221,15 @@ func (itself *Job) StopJob(updateStatus ...bool) {
 	if len(updateStatus) == 1 && updateStatus[0] == true {
 		itself.Run = false
 	}
+	if itself.cancel != nil {
+		itself.cancel()
+	}
 	if itself.cmd != nil && itself.cmd.Process != nil {
-		// 先发送终止信号
 		err := itself.cmd.Process.Signal(os.Interrupt)
 		if err != nil {
 			slog.Info("发送终止信号失败:", "err", err)
 		}
 
-		// 等待5秒让进程优雅退出
 		done := make(chan error, 1)
 		go func() {
 			done <- itself.cmd.Wait()
@@ -204,8 +239,7 @@ func (itself *Job) StopJob(updateStatus ...bool) {
 		defer cancel()
 		select {
 		case <-ctx.Done():
-			// 超时后强制终止
-			err = itself.cmd.Process.Kill()
+			err = KillProcessGroup(itself.cmd)
 			if err != nil {
 				slog.Info("强制终止进程失败:", "err", err)
 				return
@@ -287,73 +321,129 @@ func flushConfig() error {
 var c = cron.New()
 
 func buildCmd(job *Job) *exec.Cmd {
-    var shell string
-    var args []string
-    if runtime.GOOS == "windows" {
-        shell = "cmd.exe"
-        args = append([]string{"/C", job.BinPath}, job.Params...)
-    } else {
-        shell = os.Getenv("SHELL")
-        if shell == "" {
-            shell = "/bin/bash"
-        }
-        fullCommand := job.BinPath
-        if len(job.Params) > 0 {
-            fullCommand += " " + strings.Join(job.Params, " ")
-        }
-        args = []string{"-l", "-c", fullCommand}
-    }
-    cmd := exec.Command(shell, args...)
-    HideWindows(cmd)
-    cmd.Env = os.Environ()
-    cmd.Dir = job.Dir
-    cmd.Stdin = os.Stdin
-    cmd.Stdout = os.Stdout
-    cmd.Stderr = os.Stderr
-    return cmd
+	if runtime.GOOS == "windows" {
+		shell := "cmd.exe"
+		args := append([]string{"/C", job.BinPath}, job.Params...)
+		cmd := exec.Command(shell, args...)
+		HideWindows(cmd)
+		cmd.Env = os.Environ()
+		cmd.Dir = job.Dir
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd
+	}
+	shell := job.Options.ShellPath
+	if shell == "" {
+		shell = os.Getenv("SHELL")
+	}
+	if shell == "" {
+		shell = "/bin/bash"
+	}
+	fullCommand := job.BinPath
+	if len(job.Params) > 0 {
+		fullCommand += " " + strings.Join(job.Params, " ")
+	}
+	args := []string{"-lc", fullCommand}
+	cmd := exec.Command(shell, args...)
+	HideWindows(cmd)
+	cmd.Env = os.Environ()
+	cmd.Dir = job.Dir
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd
+}
+
+func buildCmdWithCtx(ctx context.Context, job *Job) *exec.Cmd {
+	if runtime.GOOS == "windows" {
+		shell := "cmd.exe"
+		args := append([]string{"/C", job.BinPath}, job.Params...)
+		cmd := exec.CommandContext(ctx, shell, args...)
+		HideWindows(cmd)
+		cmd.Env = os.Environ()
+		cmd.Dir = job.Dir
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd
+	}
+	shell := job.Options.ShellPath
+	if shell == "" {
+		shell = os.Getenv("SHELL")
+	}
+	if shell == "" {
+		shell = "/bin/bash"
+	}
+	fullCommand := job.BinPath
+	if len(job.Params) > 0 {
+		fullCommand += " " + strings.Join(job.Params, " ")
+	}
+	args := []string{"-lc", fullCommand}
+	cmd := exec.CommandContext(ctx, shell, args...)
+	HideWindows(cmd)
+	cmd.Env = os.Environ()
+	cmd.Dir = job.Dir
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd
 }
 
 func (itself *Job) RunOnce() error {
-    if itself.runOnceLock.TryLock() {
-        go func(job Job) {
-            defer itself.runOnceLock.Unlock()
-            execAction(job)
-        }(*itself)
-        return nil
-    }
-    return errors.New("上次手动运行尚未结束")
+	if itself.runOnceLock.TryLock() {
+		go func(job *Job) {
+			defer itself.runOnceLock.Unlock()
+			execAction(job)
+		}(itself)
+		return nil
+	}
+	return errors.New("上次手动运行尚未结束")
 }
 
-func execAction(job Job) {
-    cmd := buildCmd(&job)
-    if job.Options.OutputType == OutputTypeFile && job.Options.OutputPath != "" {
-        err := os.MkdirAll(job.Options.OutputPath, os.ModePerm)
-        if err != nil {
-            slog.Info(err.Error())
-        }
-        logFile, err := os.OpenFile(filepath.Join(job.Options.OutputPath, job.JobName+"_log.txt"),
-            os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-        if err != nil {
-            slog.Info(err.Error())
-        }
-        defer logFile.Close()
-        cmd.Stdout = logFile
-        cmd.Stderr = logFile
-    }
-    cmdErr := cmd.Run()
-    if cmdErr != nil {
-        slog.Info(cmdErr.Error())
-    }
+func execAction(job *Job) {
+	ctx, cancel := context.WithCancel(context.Background())
+	job.cancel = cancel
+	cmd := buildCmdWithCtx(ctx, job)
+	job.cmd = cmd
+	job.LastStart = time.Now()
+	job.status = Running
+	if job.Options.OutputType == OutputTypeFile && job.Options.OutputPath != "" {
+		err := os.MkdirAll(job.Options.OutputPath, os.ModePerm)
+		if err != nil {
+			slog.Info(err.Error())
+		}
+		logFile, err := os.OpenFile(filepath.Join(job.Options.OutputPath, job.JobName+"_log.txt"),
+			os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			slog.Info(err.Error())
+		}
+		defer logFile.Close()
+		cmd.Stdout = io.MultiWriter(os.Stdout, logFile)
+		cmd.Stderr = io.MultiWriter(os.Stderr, logFile)
+	}
+	cmdErr := cmd.Run()
+	if cmdErr != nil {
+		slog.Info(cmdErr.Error())
+	}
+	job.LastExit = time.Now()
+	job.LastDuration = job.LastExit.Sub(job.LastStart)
+	if cmd.ProcessState != nil {
+		job.LastExitCode = cmd.ProcessState.ExitCode()
+	}
+	job.status = Stop
+	job.cancel = nil
+	job.cmd = nil
 }
 
 // JobInit 初始化并执行
 func (itself *Job) JobInit() error {
-    itself.confLock.Lock()
-    defer itself.confLock.Unlock()
-    if itself.cmd == nil {
-        itself.cmd = buildCmd(itself)
-        go itself.jobGuard()
-        return nil
-    }
-    return errors.New("程序运行中")
+	itself.confLock.Lock()
+	defer itself.confLock.Unlock()
+	if itself.cmd == nil {
+		itself.cmd = buildCmd(itself)
+		go itself.jobGuard()
+		return nil
+	}
+	return errors.New("程序运行中")
 }

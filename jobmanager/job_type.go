@@ -1,6 +1,7 @@
 package jobmanager
 
 import (
+	"context"
 	"os/exec"
 	"sync"
 	"time"
@@ -31,9 +32,11 @@ const (
 )
 
 type RunOptions struct {
-	OutputType  OutputType `json:"outputType"`  // 输出方式
-	OutputPath  string     `json:"outputPath"`  // 输出路径
-	MaxFailures int        `json:"maxFailures"` // 最大失败次数
+	OutputType    OutputType `json:"outputType"`  // 输出方式
+	OutputPath    string     `json:"outputPath"`  // 输出路径
+	MaxFailures   int        `json:"maxFailures"` // 最大失败次数
+	ShellPath     string     `json:"shellPath"`
+	MinRunSeconds int        `json:"minRunSeconds"`
 }
 
 type Job struct {
@@ -50,9 +53,15 @@ type Job struct {
 	status   RunStatus
 	confLock *sync.Mutex
 	cmd      *exec.Cmd
+	cancel   context.CancelFunc
 
 	entityId    cron.EntryID
 	runOnceLock *sync.Mutex
+
+	LastStart    time.Time
+	LastExit     time.Time
+	LastExitCode int
+	LastDuration time.Duration
 }
 
 func (itself *Job) IsRun() bool {

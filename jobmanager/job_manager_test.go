@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -107,4 +108,32 @@ func TestSH(t *testing.T) {
 		sendFromAdmin <- true
 	}
 	time.Sleep(time.Second * 4)
+}
+
+func TestExecActionSetsStatusAndObservables(t *testing.T) {
+	tmpDir := t.TempDir()
+	job := Job{
+		UUID:    generateUUID(),
+		JobName: "test-echo",
+		Type:    2,
+		Run:     true,
+		BinPath: "/bin/echo",
+		Params:  []string{"ok"},
+		Dir:     tmpDir,
+		Options: RunOptions{OutputType: OutputTypeFile, OutputPath: tmpDir},
+	}
+	job.ConfigInit()
+	execAction(&job)
+	if job.status != Stop {
+		t.Fatalf("status not Stop: %v", job.status)
+	}
+	if job.LastExitCode != 0 {
+		t.Fatalf("exit code not 0: %v", job.LastExitCode)
+	}
+	if job.LastDuration <= 0 {
+		t.Fatalf("duration not positive: %v", job.LastDuration)
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, job.JobName+"_log.txt")); err != nil {
+		t.Fatalf("log file missing: %v", err)
+	}
 }
