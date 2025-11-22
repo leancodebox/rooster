@@ -1,8 +1,8 @@
 Website = "https://github.com/leancodebox/rooster"
 
 [Details]
-Icon = "logo.png"
+Icon = "../resource/logo.png"
 Name = "rooster-desktop"
 ID = "com.leancodebox.rooster"
 Version = "0.0.1"
-Build = 5
+Build = 10
