@@ -48,7 +48,8 @@ func ServeRun() *http.Server {
 		c.Redirect(http.StatusTemporaryRedirect, "/actor")
 	})
 	actV3 := r.Group("actor")
-	actV3.StaticFS("", PFilSystem("./v3", assert.GetActorV3Fs()))
+	static, _ := fs.Sub(assert.GetActorV3Fs(), path.Join("static", "dist"))
+	actV3.StaticFS("", http.FS(static))
 	api := r.Group("api")
 	api.GET("/job-list", func(c *gin.Context) {
 		all := jobmanager.JobList()
