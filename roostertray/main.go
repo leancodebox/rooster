@@ -50,44 +50,49 @@ func main() {
 	roosterApp := app.NewWithID("com.leancodebox.rooster")
 	logLifecycle(roosterApp)
 	roosterApp.SetIcon(assets.GetAppIcon())
-	serverErr := startRoosterServer()
-	port := jobmanagerserver.GetPort()
-	url := fmt.Sprintf("http://localhost:%d/actor/", port)
 	// 桌面系统设置托盘
 	if desk, ok := roosterApp.(desktop.App); ok {
-		var list []*fyne.MenuItem
-		open := fyne.NewMenuItem("打开管理", func() {
-			err := openURL(url)
-			if err != nil {
-				slog.Info(err.Error())
-			}
-		})
-		list = append(list, open)
-		list = append(list, fyne.NewMenuItem(fmt.Sprintf("端口: %d", port), nil))
-		if serverErr != nil {
-			list = append(list, fyne.NewMenuItem(serverErr.Error(), func() {
-				err := openURL(url)
-				if err != nil {
-					slog.Info(err.Error())
-				}
-			}))
-		} else {
-			if port > 0 {
-				err := openURL(url)
-				if err != nil {
-					slog.Info(err.Error())
-				}
-			}
-		}
-
 		desk.SetSystemTrayIcon(theme.ListIcon())
-
-		m := fyne.NewMenu("rooster-desktop",
-			list...,
-		)
-
+		m := fyne.NewMenu("rooster-desktop启动中")
 		desk.SetSystemTrayMenu(m)
 	}
+	go func() {
+		serverErr := startRoosterServer()
+		port := jobmanagerserver.GetPort()
+		url := fmt.Sprintf("http://localhost:%d/actor/", port)
+		// 桌面系统设置托盘
+		if desk, ok := roosterApp.(desktop.App); ok {
+			var list []*fyne.MenuItem
+			open := fyne.NewMenuItem("打开管理", func() {
+				err := openURL(url)
+				if err != nil {
+					slog.Info(err.Error())
+				}
+			})
+			list = append(list, open)
+			list = append(list, fyne.NewMenuItem(fmt.Sprintf("端口: %d", port), nil))
+			if serverErr != nil {
+				list = append(list, fyne.NewMenuItem(serverErr.Error(), func() {
+					err := openURL(url)
+					if err != nil {
+						slog.Info(err.Error())
+					}
+				}))
+			} else {
+				if port > 0 {
+					err := openURL(url)
+					if err != nil {
+						slog.Info(err.Error())
+					}
+				}
+			}
+
+			m := fyne.NewMenu("rooster-desktop",
+				list...,
+			)
+			desk.SetSystemTrayMenu(m)
+		}
+	}()
 	//roosterSay.InitFyneApp(roosterApp)
 	roosterApp.Run()
 }
