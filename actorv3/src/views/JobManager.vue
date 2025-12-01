@@ -35,6 +35,7 @@ const defaultLogDir = ref('')
 const model = ref(getInitData(1))
 let timer: any = 0
 const runtimeDigits = ref({day: 0, hour: 0, minute: 0, second: 0})
+
 function calcDigits(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000))
   const day = Math.floor(s / 86400)
@@ -43,6 +44,7 @@ function calcDigits(ms: number) {
   const second = s % 60
   return {day, hour, minute, second}
 }
+
 function parseStart(s: string) {
   const p = s.split(/[- :]/).map((x) => parseInt(x, 10))
   if (p.length >= 6 && p.every((x) => !isNaN(x))) {
@@ -56,7 +58,7 @@ function parseStart(s: string) {
 
 function getInitData(type: number) {
   return {
-    uuid: '', jobName: '', type, spec: '* * * * *', binPath: '', dir: '', run: false,
+    uuid: '', jobName: '',link:'', type, spec: '* * * * *', binPath: '', dir: '', run: false,
     options: {maxFailures: 5, outputPath: defaultLogDir.value || '/tmp', outputType: 2}, edit: false, readonly: false
   }
 }
@@ -217,7 +219,8 @@ onMounted(async () => {
     const r = await getHomePath()
     const h = r.data.home || ''
     defaultLogDir.value = h ? `${h}/.roosterTaskConfig/log` : ''
-  } catch {}
+  } catch {
+  }
   try {
     const info = await runInfo()
     const startStr = info.data.start
@@ -228,7 +231,8 @@ onMounted(async () => {
       const diff = Date.now() - startAt.getTime()
       runtimeDigits.value = calcDigits(diff)
     }, 1000)
-  } catch {}
+  } catch {
+  }
 })
 onUnmounted(() => {
   clearInterval(timer)
@@ -289,7 +293,10 @@ onUnmounted(() => {
             </thead>
             <tbody>
             <tr v-for="row in resident" :key="row.uuid">
-              <td class="truncate max-w-[14rem] sm:max-w-[18rem]">{{ row.jobName }}</td>
+              <td class="truncate max-w-[14rem] sm:max-w-[18rem]">
+                <a v-if="row.link" :href="row.link"  class="btn btn-link font-mono no-underline px-0" target="_blank">{{row.jobName}}</a>
+                <span v-else>{{ row.jobName }}</span>
+              </td>
               <td class="whitespace-nowrap"><span class="text-sm"
                                                   :class="row.run ? 'badge badge-success badge-sm whitespace-nowrap' : 'badge badge-sm whitespace-nowrap'">{{
                   row.run ? '开启' : '关闭'
@@ -368,30 +375,32 @@ onUnmounted(() => {
       <div class="modal-box w-11/12 max-w-xl">
         <h3 class="font-bold text-lg">{{ model.edit ? '任务调整' : '任务新增' }}</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 py-4">
-          <div class="form-control"><label class="label"><span class="label-text">JobName</span></label><input
+          <div class="form-control"><label class="floating-label"><span>JobName</span></label><input
               class="input input-bordered input-sm" v-model="model.jobName" :disabled="model.readonly"/></div>
-          <div class="form-control"><label class="label"><span class="label-text">类型</span></label><select
+          <div class="form-control"><label class="floating-label"><span>类型</span></label><select
               class="select select-bordered select-sm" v-model="model.type" :disabled="model.edit || model.readonly">
             <option :value="1">常驻任务</option>
             <option :value="2">定时任务</option>
           </select></div>
-          <div class="form-control" v-if="model.type===2"><label class="label"><span
-              class="label-text">Cron</span></label><input class="input input-bordered input-sm" v-model="model.spec"
+          <div class="form-control"><label class="floating-label"><span>link</span></label><input
+              class="input input-bordered input-sm" v-model="model.link" :disabled="model.readonly"/></div>
+          <div class="form-control" v-if="model.type===2"><label class="floating-label"><span
+          >Cron</span></label><input class="input input-bordered input-sm" v-model="model.spec"
                                                            :disabled="model.readonly"/></div>
-          <div class="form-control"><label class="label"><span class="label-text">Command</span></label><input
+          <div class="form-control"><label class="floating-label"><span>Command</span></label><input
               class="input input-bordered input-sm" v-model="model.binPath" :disabled="model.readonly"
               placeholder="例如：/bin/bash -lc 'echo hi'"/></div>
-          <div class="form-control"><label class="label"><span class="label-text">RunPath</span></label><input
+          <div class="form-control"><label class="floating-label"><span>RunPath</span></label><input
               class="input input-bordered input-sm" v-model="model.dir" :disabled="model.readonly"/></div>
-          <div class="form-control"><label class="label"><span class="label-text">日志方式</span></label><select
+          <div class="form-control"><label class="floating-label"><span>日志方式</span></label><select
               class="select select-bordered select-sm" v-model="model.options.outputType" :disabled="model.readonly">
             <option :value="1">标准</option>
             <option :value="2">文件</option>
           </select></div>
-          <div class="form-control" v-if="model.options.outputType===2"><label class="label"><span class="label-text">LogDir</span></label><input
+          <div class="form-control" v-if="model.options.outputType===2"><label class="floating-label"><span>LogDir</span></label><input
               class="input input-bordered input-sm" v-model="model.options.outputPath" :disabled="model.readonly"/>
           </div>
-          <div class="form-control"><label class="label"><span class="label-text">MaxFailures</span></label><input
+          <div class="form-control"><label class="floating-label"><span>MaxFailures</span></label><input
               type="number" class="input input-bordered input-sm" v-model="model.options.maxFailures"
               :disabled="model.readonly"/></div>
         </div>
@@ -412,12 +421,12 @@ onUnmounted(() => {
         </div>
         <div class="flex items-center gap-2 mb-2">
           <label class="label cursor-pointer">
-            <span class="label-text">实时滚动</span>
+            <span>实时滚动</span>
             <input type="checkbox" class="toggle toggle-sm" v-model="isStreaming"
                    @change="isStreaming ? startStreaming() : stopStreaming()"/>
           </label>
           <label class="label cursor-pointer">
-            <span class="label-text">自动滚动</span>
+            <span>自动滚动</span>
             <input type="checkbox" class="toggle toggle-sm" v-model="autoScroll"/>
           </label>
         </div>

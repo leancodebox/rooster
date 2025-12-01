@@ -56,6 +56,7 @@ const (
 type Job struct {
 	UUID    string     `json:"uuid"`
 	JobName string     `json:"jobName"`
+	Link    string     `json:"link"`
 	Type    JobType    `json:"type"` // 运行模式 1 常驻 / 2 定时
 	Run     bool       `json:"run"`
 	BinPath string     `json:"binPath"`

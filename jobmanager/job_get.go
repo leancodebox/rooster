@@ -17,6 +17,7 @@ type JobStatusShow struct {
 	Dir     string     `json:"dir"`
 	Spec    string     `json:"spec"`
 	Options RunOptions `json:"options"` // 运行选项
+	Link    string     `json:"link"`    // 快速跳转链接
 
 	Status       RunStatus     `json:"status"`
 	LastStart    time.Time     `json:"lastStart"`
@@ -30,6 +31,7 @@ func job2jobStatus(job Job) JobStatusShow {
 	return JobStatusShow{
 		UUID:         job.UUID,
 		JobName:      job.JobName,
+		Link:         job.Link,
 		Type:         int(job.Type),
 		Run:          job.Run,
 		BinPath:      job.BinPath,
@@ -170,6 +172,7 @@ func SaveTask(job JobStatusShow) error {
 		newJob := Job{
 			UUID:    job.UUID,
 			JobName: job.JobName,
+			Link:    job.Link,
 			Type:    JobType(job.Type),
 			Run:     job.Run,
 			BinPath: job.BinPath,
@@ -195,6 +198,7 @@ func SaveTask(job JobStatusShow) error {
 				jobItem.Dir = job.Dir
 				jobItem.Spec = job.Spec
 				jobItem.Options = job.Options
+				jobItem.Link = job.Link
 				needFlush = true
 			}
 		}
