@@ -53,7 +53,9 @@ func main() {
 	// 桌面系统设置托盘
 	if desk, ok := roosterApp.(desktop.App); ok {
 		desk.SetSystemTrayIcon(theme.ListIcon())
-		m := fyne.NewMenu("rooster-desktop启动中")
+		var list []*fyne.MenuItem
+		m := fyne.NewMenu("rooster-desktop")
+		list = append(list, fyne.NewMenuItem("启动中...", nil))
 		desk.SetSystemTrayMenu(m)
 	}
 	go func() {
