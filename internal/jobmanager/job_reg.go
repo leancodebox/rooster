@@ -16,54 +16,91 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-var startTime = time.Now()
+func (m *Manager) Closed() bool {
+	m.closingLock.RLock()
+	defer m.closingLock.RUnlock()
+	return m.closing
+}
 
-var signClose = false
+func (m *Manager) StartClose() {
+	m.closingLock.Lock()
+	defer m.closingLock.Unlock()
+	m.closing = true
+}
 
 func Closed() bool {
-	return signClose
+	if DefaultManager != nil {
+		return DefaultManager.Closed()
+	}
+	return false
 }
+
 func StartClose() {
-	signClose = true
+	if DefaultManager != nil {
+		DefaultManager.StartClose()
+	}
 }
 
-type RunStatus int
+var DefaultManager *Manager
 
-const (
-	Stop RunStatus = iota
-	Running
-)
+type Manager struct {
+	config         JobConfig
+	cron           *cron.Cron
+	closing        bool
+	closingLock    sync.RWMutex
+	configLock     sync.Mutex
+	taskStatusLock sync.Mutex
+	startTime      time.Time
+}
 
-var jobConfigV2 JobConfig
-
-func RegV2(fileData []byte) {
-	err := json.Unmarshal(fileData, &jobConfigV2)
+func NewManager(fileData []byte) (*Manager, error) {
+	var config JobConfig
+	err := json.Unmarshal(fileData, &config)
 	if err != nil {
-		slog.Info(err.Error())
-		return
+		return nil, err
 	}
 
-	for _, job := range jobConfigV2.GetResidentTask() {
-		job.ConfigInit()
+	m := &Manager{
+		config:    config,
+		cron:      cron.New(),
+		startTime: time.Now(),
+	}
+	return m, nil
+}
+
+func (m *Manager) Start() {
+	for _, job := range m.config.GetResidentTask() {
+		m.ConfigInit(job)
+
 		if job.Run {
-			job.JobInit()
+			m.StartResidentJob(job)
 		}
 
 		slog.Info(fmt.Sprintf("%v 加入常驻任务", job.UUID+job.JobName))
 	}
 
-	go scheduleV2(jobConfigV2.GetScheduledTask())
+	go m.scheduleV2(m.config.GetScheduledTask())
 }
 
-func scheduleV2(jobList []*Job) {
+func RegV2(fileData []byte) {
+	mgr, err := NewManager(fileData)
+	if err != nil {
+		slog.Info(err.Error())
+		return
+	}
+	DefaultManager = mgr
+	DefaultManager.Start()
+}
+
+func (m *Manager) scheduleV2(jobList []*Job) {
 	for _, job := range jobList {
-		job.ConfigInit()
+		m.ConfigInit(job)
 		if !job.Run {
 			continue
 		}
-		entityId, err := c.AddFunc(job.Spec, func(job *Job) func() {
+		entityId, err := m.cron.AddFunc(job.Spec, func(job *Job) func() {
 			return func() {
-				execAction(job)
+				m.execAction(job)
 			}
 		}(job))
 		if err != nil {
@@ -73,14 +110,14 @@ func scheduleV2(jobList []*Job) {
 			slog.Info(fmt.Sprintf("%v 加入任务", job.GetJobName()))
 		}
 	}
-	c.Start()
+	m.cron.Start()
 }
 
-func (itself *Job) ConfigInit() {
+func (m *Manager) ConfigInit(itself *Job) {
 	needFlush := false
 	defer func() {
 		if needFlush {
-			flushConfig()
+			m.flushConfig()
 		}
 	}()
 	if itself.UUID == "" {
@@ -89,7 +126,7 @@ func (itself *Job) ConfigInit() {
 	}
 	itself.confLock = &sync.Mutex{}
 	itself.runOnceLock = &sync.Mutex{}
-	def := jobConfigV2.Config.DefaultOptions
+	def := m.config.Config.DefaultOptions
 	if itself.Options.OutputType == 0 {
 		if def.OutputType == 0 {
 			itself.Options.OutputType = OutputTypeFile
@@ -113,13 +150,19 @@ func (itself *Job) ConfigInit() {
 	if itself.Options.ShellPath == "" {
 		itself.Options.ShellPath = def.ShellPath
 	}
+
+	// Initialize runtime log path
+	if path, err := ResolveLogPath(itself.JobName, itself.Options); err == nil {
+		itself.runtimeLogPath = path
+	}
 }
 
 func (itself *Job) GetJobName() string {
 	return fmt.Sprintf("%v:%v", itself.UUID, itself.JobName)
 }
 
-func (itself *Job) jobGuard() {
+// runResidentJobLoop 常驻任务的守护循环
+func (m *Manager) runResidentJobLoop(job *Job) {
 	defer func() {
 		if err := recover(); err != nil {
 			slog.Error("jobGuard", "err", err)
@@ -131,35 +174,38 @@ func (itself *Job) jobGuard() {
 	counter := 1
 	consecutiveFailures := 0
 	for {
-		if !itself.Run {
-			slog.Info(fmt.Sprintf("%v : no Run ", itself.JobName))
+		if !job.Run {
+			slog.Info(fmt.Sprintf("%v : no Run ", job.JobName))
 			return
 		}
 		unitStartTime := time.Now()
 		counter += 1
 
-		// Prepare context for cancellation (Phase 3 transition)
-		// For now we use Background but support cancellation via itself.cancel
+		// 准备取消上下文 (Phase 3 迁移)
+		// 目前使用 Background，但支持通过 job.cancel 进行取消
 		ctx, cancel := context.WithCancel(context.Background())
-		itself.cancel = cancel
+		job.cancel = cancel
 
-		// Execute the job
-		result := executor.Execute(ctx, itself)
+		// 执行任务
+		result := executor.Execute(ctx, job, func(pid int) {
+			job.Pid = pid
+			m.flushConfig()
+		})
 
-		// Cleanup context
-		itself.cancel = nil
+		// 清理上下文
+		job.cancel = nil
 		cancel()
 
-		// Logic for retry/backoff based on result
+		// 基于结果的重试/退避逻辑
 		cmdErr := result.Error
 
 		executionTime := time.Since(unitStartTime)
 		if cmdErr != nil {
-			slog.Info(cmdErr.Error(), "jobName", itself.JobName)
+			slog.Info(cmdErr.Error(), "jobName", job.JobName)
 		}
 		threshold := maxExecutionTime
-		if itself.Options.MinRunSeconds > 0 {
-			threshold = time.Duration(itself.Options.MinRunSeconds) * time.Second
+		if job.Options.MinRunSeconds > 0 {
+			threshold = time.Duration(job.Options.MinRunSeconds) * time.Second
 		}
 		if executionTime <= threshold {
 			consecutiveFailures += 1
@@ -167,22 +213,24 @@ func (itself *Job) jobGuard() {
 			consecutiveFailures = 0
 		}
 
-		if !itself.Run || Closed() {
-			msg := itself.JobName + " 溜了溜了"
+		if !job.Run || m.Closed() {
+			msg := job.JobName + " 溜了溜了"
 			slog.Info(msg)
 			break
 		}
 
 		failLimit := maxConsecutiveFailures
-		if itself.Options.MaxFailures > 0 && itself.Options.MaxFailures > failLimit {
-			failLimit = itself.Options.MaxFailures
+		if job.Options.MaxFailures > 0 && job.Options.MaxFailures > failLimit {
+			failLimit = job.Options.MaxFailures
 		}
 		if consecutiveFailures >= failLimit {
-			msg := itself.JobName + "程序连续3次启动失败，停止重启"
+			msg := job.JobName + "程序连续3次启动失败，停止重启"
 			slog.Info(msg)
+			job.Run = false
+			m.flushConfig()
 			break
 		} else {
-			msg := itself.JobName + "程序终止尝试重新运行"
+			msg := job.JobName + "程序终止尝试重新运行"
 			slog.Info(msg)
 			var maxDelay = 16
 			calculatedDelay := 1 << uint(consecutiveFailures)
@@ -201,33 +249,56 @@ func (itself *Job) jobGuard() {
 
 var sleepFn = time.Sleep
 
-func (itself *Job) ForceRunJob() error {
-	itself.Run = true
-	return itself.JobInit()
+// ForceRunJob 强制运行任务
+func (m *Manager) ForceRunJob(job *Job) error {
+	job.Run = true
+	return m.StartResidentJob(job)
 }
 
-func (itself *Job) StopJob() {
-	itself.confLock.Lock()
-	defer itself.confLock.Unlock()
-	itself.Run = false
+func ForceRunJob(job *Job) error {
+	if DefaultManager != nil {
+		return DefaultManager.ForceRunJob(job)
+	}
+	return errors.New("manager not initialized")
+}
 
-	if itself.cancel != nil {
-		itself.cancel()
+// StopJob 停止任务
+func (m *Manager) StopJob(job *Job) {
+	job.confLock.Lock()
+	defer job.confLock.Unlock()
+	job.Run = false
+
+	if job.cancel != nil {
+		job.cancel()
 	}
 }
 
-var start time.Time
+func StopJob(job *Job) {
+	if DefaultManager != nil {
+		DefaultManager.StopJob(job)
+	}
+}
 
-func init() {
-	start = time.Now()
+func (m *Manager) GetRunTime() time.Duration {
+	return time.Since(m.startTime)
 }
 
 func GetRunTime() time.Duration {
-	return time.Since(start)
+	if DefaultManager != nil {
+		return DefaultManager.GetRunTime()
+	}
+	return 0
+}
+
+func (m *Manager) GetStartTime() time.Time {
+	return m.startTime
 }
 
 func GetStartTime() time.Time {
-	return start
+	if DefaultManager != nil {
+		return DefaultManager.GetStartTime()
+	}
+	return time.Time{}
 }
 
 var userHomeDirFn = os.UserHomeDir
@@ -237,6 +308,9 @@ func getConfigPath() (string, error) {
 	if err != nil {
 		slog.Error("获取家目录失败", "err", err)
 		homeDir = "tmp"
+	}
+	if devPath := getDevHomeDir(); devPath != "" {
+		homeDir = devPath
 	}
 	configDir := path.Join(homeDir, ".roosterTaskConfig")
 	slog.Info("当前目录", "homeDir", homeDir)
@@ -259,6 +333,9 @@ func getLogDir() (string, error) {
 	if err != nil {
 		slog.Error("获取家目录失败", "err", err)
 		homeDir = "tmp"
+	}
+	if devPath := getDevHomeDir(); devPath != "" {
+		homeDir = devPath
 	}
 	configDir := path.Join(homeDir, ".roosterTaskConfig")
 	logDir := path.Join(configDir, "log")
@@ -296,14 +373,16 @@ func RegByUserConfig() error {
 	return nil
 }
 
-func flushConfig() {
+func (m *Manager) flushConfig() {
 	jobConfigPath, err := getConfigPath()
 	slog.Error("flushConfigErr", "err", err)
 	if err != nil {
 		slog.Error("flushConfigErr", "err", err)
 		return
 	}
-	data, err := json.MarshalIndent(jobConfigV2, "", "  ")
+	m.configLock.Lock()
+	defer m.configLock.Unlock()
+	data, err := json.MarshalIndent(m.config, "", "  ")
 	if err != nil {
 		slog.Error("flushConfigErr", "err", err)
 		return
@@ -315,24 +394,29 @@ func flushConfig() {
 	}
 }
 
-// Cron 调度器实例
-var c = cron.New()
+// buildCmd / buildCmdWithCtx 定义在特定平台的代码文件中，以获得更好的测试覆盖率
 
-// buildCmd / buildCmdWithCtx moved to platform-specific files for better test coverage
-
-func (itself *Job) RunOnce() error {
-	if itself.runOnceLock.TryLock() {
-		go func(job *Job) {
-			defer itself.runOnceLock.Unlock()
-			execAction(job)
-		}(itself)
+// RunScheduledJob 运行一次定时任务（手动触发或定时触发）
+func (m *Manager) RunScheduledJob(job *Job) error {
+	if job.runOnceLock.TryLock() {
+		go func(j *Job) {
+			defer j.runOnceLock.Unlock()
+			m.execAction(j)
+		}(job)
 		return nil
 	}
 	return errors.New("上次手动运行尚未结束")
 }
 
+func RunScheduledJob(job *Job) error {
+	if DefaultManager != nil {
+		return DefaultManager.RunScheduledJob(job)
+	}
+	return errors.New("manager not initialized")
+}
+
 // execAction 执行一次性任务并记录观测值
-func execAction(job *Job) {
+func (m *Manager) execAction(job *Job) {
 	ctx, cancel := context.WithCancel(context.Background())
 	job.cancel = cancel
 	defer func() {
@@ -341,25 +425,41 @@ func execAction(job *Job) {
 	}()
 
 	executor := NewJobExecutor()
-	result := executor.Execute(ctx, job)
+	result := executor.Execute(ctx, job, nil)
 
 	if result.Error != nil {
 		slog.Info(result.Error.Error())
 	}
 }
 
-// JobInit 初始化并执行常驻任务守护
-func (itself *Job) JobInit() error {
-	itself.confLock.Lock()
-	defer itself.confLock.Unlock()
+// StartResidentJob 初始化并执行常驻任务守护
+func (m *Manager) StartResidentJob(job *Job) error {
+	job.confLock.Lock()
+	defer job.confLock.Unlock()
 	// 如果已经在运行中，则不重复启动
-	if itself.status == Running {
+	if job.RunningLoop {
 		return errors.New("程序运行中")
 	}
-	itself.Run = true
-	go itself.jobGuard()
+	job.Run = true
+	job.RunningLoop = true
+	go func() {
+		defer func() {
+			job.confLock.Lock()
+			job.RunningLoop = false
+			job.confLock.Unlock()
+		}()
+		m.runResidentJobLoop(job)
+	}()
 	return nil
 }
+
+func StartResidentJob(job *Job) error {
+	if DefaultManager != nil {
+		return DefaultManager.StartResidentJob(job)
+	}
+	return errors.New("manager not initialized")
+}
+
 func generateDefaultJobConfig() JobConfig {
 	shellLoop := "while true; do echo 'rooster'; sleep 1; done"
 	tick := "echo 'tick'"

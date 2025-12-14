@@ -2,10 +2,7 @@ package server
 
 import (
 	"fmt"
-	"io"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -47,45 +44,4 @@ func getJobLogPath(j jobmanager.JobStatusShow) (string, bool) {
 		return j.RealLogPath, true
 	}
 	return "", false
-}
-
-func readTail(path string, lines, bytes, maxBytes int) ([]byte, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	st, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	if bytes > 0 {
-		if bytes > maxBytes {
-			bytes = maxBytes
-		}
-		off := st.Size() - int64(bytes)
-		if off < 0 {
-			off = 0
-		}
-		_, _ = f.Seek(off, io.SeekStart)
-		buf := make([]byte, st.Size()-off)
-		n, _ := io.ReadFull(f, buf)
-		return buf[:n], nil
-	}
-	// read lines tail
-	// naive implementation: read last maxBytes then split
-	sz := st.Size()
-	read := int64(maxBytes)
-	if read > sz {
-		read = sz
-	}
-	_, _ = f.Seek(sz-read, io.SeekStart)
-	buf := make([]byte, read)
-	n, _ := io.ReadFull(f, buf)
-	parts := strings.Split(string(buf[:n]), "\n")
-	if len(parts) <= lines {
-		return buf[:n], nil
-	}
-	tail := strings.Join(parts[len(parts)-lines-1:], "\n")
-	return []byte(tail), nil
 }

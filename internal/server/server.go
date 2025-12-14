@@ -18,12 +18,25 @@ import (
 
 var srv *http.Server
 var serverPort int
+var shutdownCtx context.Context
+var shutdownCancel context.CancelFunc
+
+func timeoutMiddleware(timeout time.Duration) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
+		defer cancel()
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	}
+}
 
 func ServeRun() *http.Server {
 	port := jobmanager.GetHttpConfig().Dashboard.Port
 	if port <= 0 {
 		return nil
 	}
+
+	shutdownCtx, shutdownCancel = context.WithCancel(context.Background())
 
 	gin.DisableConsoleColor()
 	gin.SetMode(gin.ReleaseMode)
@@ -32,7 +45,6 @@ func ServeRun() *http.Server {
 	srv = &http.Server{
 		Handler:        r,
 		ReadTimeout:    10 * time.Second,
-		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
 	r.Use(GinCors)
@@ -50,23 +62,26 @@ func ServeRun() *http.Server {
 
 	api := r.Group("api")
 
-	// System handlers
-	api.GET("/home-path", handleHomePath)
-	api.GET("/run-info", handleRunInfo)
-
-	// Job handlers
-	api.GET("/job-list", handleJobList)
-	api.POST("/run-job-resident-task", handleRunJobResidentTask)
-	api.POST("/stop-job-resident-task", handleStopJobResidentTask)
-	api.POST("/open-close-task", handleOpenCloseTask)
-	api.POST("/run-task", handleRunTask)
-	api.POST("/save-task", handleSaveTask)
-	api.POST("/remove-task", handleRemoveTask)
-
-	// Log handlers
-	api.GET("/job-log", handleJobLog)
-	api.GET("/job-log-download", handleJobLogDownload)
+	// Log handlers (No timeout)
 	api.GET("/job-log-stream", handleJobLogStream)
+
+	// Standard handlers (With 10s timeout)
+	stdApi := api.Group("/")
+	stdApi.Use(timeoutMiddleware(10 * time.Second))
+	{
+		// System handlers
+		stdApi.GET("/home-path", handleHomePath)
+		stdApi.GET("/run-info", handleRunInfo)
+
+		// Job handlers
+		stdApi.GET("/job-list", handleJobList)
+		stdApi.POST("/run-job-resident-task", handleRunJobResidentTask)
+		stdApi.POST("/stop-job-resident-task", handleStopJobResidentTask)
+		stdApi.POST("/open-close-task", handleOpenCloseTask)
+		stdApi.POST("/run-task", handleRunTask)
+		stdApi.POST("/save-task", handleSaveTask)
+		stdApi.POST("/remove-task", handleRemoveTask)
+	}
 
 	var ln net.Listener
 	for i := 0; i < 1000; i++ {
@@ -99,6 +114,12 @@ func ServeStop() {
 		return
 	}
 	slog.Info("Shutdown Server ...")
+
+	// Cancel global context to notify handlers (e.g. log stream) to exit immediately
+	if shutdownCancel != nil {
+		shutdownCancel()
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {

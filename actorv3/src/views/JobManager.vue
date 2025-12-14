@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import {onMounted, onUnmounted, ref} from 'vue'
+import {onMounted, onUnmounted, ref, nextTick} from 'vue'
 import {
-  downloadJobLog,
   getHomePath,
   getJobList,
-  getJobLog,
   removeTask,
   runInfo,
   runJob,
@@ -14,6 +12,11 @@ import {
   stopJob
 } from '../request/remote'
 
+import { Terminal } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
+import { WebLinksAddon } from '@xterm/addon-web-links'
+import '@xterm/xterm/css/xterm.css'
+
 const data = ref<any[]>([])
 const resident = ref<any[]>([])
 const scheduled = ref<any[]>([])
@@ -22,12 +25,17 @@ const showLogModal = ref(false)
 const showDeleteModal = ref(false)
 const pendingDeleteUuid = ref('')
 const logContent = ref('')
-const logInfo = ref<any>({hasLog: false, realLogPath: '', size: 0, modTime: '', uuid: ''})
+const logInfo = ref<any>({realLogPath: '', size: 0, modTime: '', uuid: ''})
 const isStreaming = ref(false)
+const connectionState = ref('Disconnected')
 const autoScroll = ref(true)
 let logTimer: any = 0
+let watchdogTimer: any = 0
 let evt: EventSource | null = null
 const currentJob = ref<any>(null)
+let term: Terminal | null = null
+let fitAddon: FitAddon | null = null
+const terminalContainerRef = ref<HTMLElement | null>(null)
 const appRunTime = ref({start: '', runTime: ''})
 const defaultLogDir = ref('')
 const model = ref(getInitData(1))
@@ -79,7 +87,7 @@ function edit(row: any) {
 
 async function viewLog(row: any) {
   const item = row
-  logInfo.value = item || {hasLog: false}
+  logInfo.value = item || {realLogPath: ''}
   isStreaming.value = false
   clearInterval(logTimer)
   if (evt) {
@@ -87,77 +95,111 @@ async function viewLog(row: any) {
     evt = null
   }
   currentJob.value = row
-  if (!logInfo.value.hasLog) {
-    logContent.value = '未开启日志或日志暂无内容'
-  } else {
-    const resp = await getJobLog(row.uuid, 200, 0)
-    logContent.value = resp.data.content || ''
-  }
   showLogModal.value = true
+  
+  await nextTick()
+  initTerminal()
+  
   isStreaming.value = true
   startStreaming()
 }
 
-async function downloadLog() {
-  const r = await downloadJobLog(logInfo.value.uuid)
-  const url = window.URL.createObjectURL(r.data as any)
-  const a = window.document.createElement('a')
-  a.href = url;
-  a.download = (logInfo.value.logPath || 'log.txt');
-  a.click();
-  window.URL.revokeObjectURL(url)
+function initTerminal() {
+  const terminalContainer = terminalContainerRef.value
+  if (!terminalContainer) return
+
+  // Dispose previous instance if exists
+  if (term) {
+    term.dispose()
+  }
+
+  term = new Terminal({
+    cursorBlink: true,
+    disableStdin: true,
+    theme: {
+      background: '#1e1e1e',
+    },
+    convertEol: true, // Handle \n as \r\n
+  })
+  
+  fitAddon = new FitAddon()
+  term.loadAddon(fitAddon)
+  term.loadAddon(new WebLinksAddon())
+  
+  term.open(terminalContainer)
+  fitAddon.fit()
+
+  // Handle window resize
+  window.addEventListener('resize', onResize)
+}
+
+function onResize() {
+  fitAddon?.fit()
 }
 
 function scrollToBottom() {
-  if (!autoScroll.value) return
-  const pre = document.querySelector('#log-view-pre') as HTMLElement
-  if (pre) pre.scrollTop = pre.scrollHeight
+  if (autoScroll.value && term) {
+    term.scrollToBottom()
+  }
+}
+
+function resetWatchdog() {
+  clearTimeout(watchdogTimer)
+  watchdogTimer = setTimeout(() => {
+    console.log('Watchdog timeout, reconnecting...')
+    connectionState.value = 'Reconnecting...'
+    startStreaming() // Restart connection
+  }, 15000) // 15s timeout (3x heartbeat)
 }
 
 function startStreaming() {
   isStreaming.value = true
+  connectionState.value = 'Connecting...'
   clearInterval(logTimer)
+  clearTimeout(watchdogTimer)
   if (evt) {
     evt.close();
     evt = null
   }
   const useFile = !!(currentJob.value && currentJob.value.options && currentJob.value.options.outputPath)
   if (useFile) {
+    if (term && connectionState.value !== 'Reconnecting...') term.clear()
+    
     evt = new EventSource(`/api/job-log-stream?jobId=${encodeURIComponent(currentJob.value.uuid)}`)
+    evt.onopen = () => {
+      connectionState.value = 'Connected'
+      resetWatchdog()
+    }
+    evt.addEventListener('ping', () => {
+       resetWatchdog()
+    })
     evt.onmessage = (e) => {
-      logContent.value += e.data + '\n'
-      scrollToBottom()
+      resetWatchdog()
+      if (term) {
+        term.write(e.data)
+        scrollToBottom()
+      }
     }
     evt.onerror = () => {
-      if (evt) {
-        evt.close();
-        evt = null
-      }
-      clearInterval(logTimer)
-      logTimer = setInterval(async () => {
-        const resp = await getJobLog(currentJob.value.uuid, 200, 0)
-        const content = resp.data.content || ''
-        logContent.value = content
-        scrollToBottom()
-      }, 1000)
+      connectionState.value = 'Reconnecting...'
+      // Do not close on error, let EventSource retry
+      // Only close if we manually want to stop (handled in stopStreaming)
+      console.log('EventSource error, retrying...')
+      // Watchdog will eventually handle hard failures if no events come through
     }
-  } else {
-    logTimer = setInterval(async () => {
-      const resp = await getJobLog(currentJob.value.uuid, 200, 0)
-      const content = resp.data.content || ''
-      logContent.value = content
-      scrollToBottom()
-    }, 1000)
   }
 }
 
 function stopStreaming() {
   isStreaming.value = false
+  connectionState.value = 'Disconnected'
   clearInterval(logTimer)
+  clearTimeout(watchdogTimer)
   if (evt) {
     evt.close();
     evt = null
   }
+  window.removeEventListener('resize', onResize)
 }
 
 async function refresh() {
@@ -320,8 +362,8 @@ onUnmounted(() => {
                   <button class="btn btn-sm join-item" :disabled="row.run===true"
                           @click="onRemove(row.uuid)" title="删除" aria-label="删除"><i
                       class="fa-solid fa-trash text-sm"></i></button>
-                  <button class="btn btn-sm join-item" :disabled="!row.hasLog" @click="viewLog(row)"
-                            :title="row.hasLog ? '查看日志' : '日志(未开启)'"
+                  <button class="btn btn-sm join-item" :disabled="!row.realLogPath" @click="viewLog(row)"
+                            :title="row.realLogPath ? '查看日志' : '日志(未开启)'"
                             aria-label="查看日志"><i class="fa-regular fa-file-lines text-sm"></i></button>
                 </div>
               </td>
@@ -361,8 +403,8 @@ onUnmounted(() => {
                     <button class="btn btn-sm join-item" :disabled="row.run===true"
                           @click="onRemove(row.uuid)" title="删除" aria-label="删除"><i
                       class="fa-solid fa-trash text-sm"></i></button>
-                    <button class="btn btn-sm join-item" :disabled="!row.hasLog" @click="viewLog(row)"
-                            :title="row.hasLog ? '查看日志' : '日志(未开启)'"
+                    <button class="btn btn-sm join-item" :disabled="!row.realLogPath" @click="viewLog(row)"
+                            :title="row.realLogPath ? '查看日志' : '日志(未开启)'"
                             aria-label="查看日志"><i class="fa-regular fa-file-lines text-sm"></i></button>
                   </div>
                 </div>
@@ -412,12 +454,17 @@ onUnmounted(() => {
     </div>
 
     <div v-if="showLogModal" class="modal modal-open">
-      <div class="modal-box w-11/12 max-w-2xl">
+      <div class="modal-box w-11/12 max-w-6xl">
         <h3 class="font-bold text-lg">日志查看</h3>
         <div class="py-2">路径: {{ logInfo.realLogPath || '-' }} | 大小: {{ logInfo.size }} |
           更新时间: {{ logInfo.modTime || '-' }}
         </div>
         <div class="flex items-center gap-2 mb-2">
+          <div class="badge badge-sm" :class="{
+            'badge-success': connectionState === 'Connected',
+            'badge-warning': connectionState === 'Reconnecting...',
+            'badge-ghost': connectionState === 'Disconnected' || connectionState === 'Connecting...'
+          }">{{ connectionState }}</div>
           <label class="label cursor-pointer">
             <span>实时滚动</span>
             <input type="checkbox" class="toggle toggle-sm" v-model="isStreaming"
@@ -428,12 +475,8 @@ onUnmounted(() => {
             <input type="checkbox" class="toggle toggle-sm" v-model="autoScroll"/>
           </label>
         </div>
-        <pre id="log-view-pre" class="max-h-[420px] overflow-auto bg-black text-gray-100 p-3 rounded font-mono text-sm">{{
-            logContent
-          }}</pre>
+        <div ref="terminalContainerRef" class="h-[600px] bg-[#1e1e1e] rounded overflow-hidden"></div>
         <div class="modal-action">
-          <button class="btn" :disabled="!logInfo.realLogPath" @click="downloadLog" title="下载" aria-label="下载"><i
-              class="fa-solid fa-download text-xl"></i></button>
           <button class="btn" @click="showLogModal=false; stopStreaming()" title="关闭" aria-label="关闭"><i
               class="fa-solid fa-xmark text-xl"></i></button>
         </div>

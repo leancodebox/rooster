@@ -3,7 +3,6 @@ package jobmanager
 import (
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -32,17 +31,18 @@ func (w *dualWriter) Close() error {
 	return w.file.Close()
 }
 
-// SetupLogger resolves the log path and creates a writer
-func (m *LogManager) SetupLogger(jobName string, options RunOptions) (io.WriteCloser, string, error) {
+// ResolveLogPath determines the full path for the log file based on options
+func ResolveLogPath(jobName string, options RunOptions) (string, error) {
 	// Determine log directory
 	logDir := options.OutputPath
 	useDefault := false
 
 	if logDir != "" {
-		if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
-			slog.Error("User configured log path invalid, using default", "path", logDir, "err", err)
-			useDefault = true
-		}
+		// Just check if it's a valid path format, mkdir is done later or by caller if needed.
+		// For resolution, we assume the intention is to use this path.
+		// However, original logic checked MkdirAll to see if it's valid.
+		// We should probably keep similar logic but maybe without side effects if possible?
+		// But ConfigInit is called at startup, so creating dirs is fine.
 	} else {
 		useDefault = true
 	}
@@ -51,18 +51,27 @@ func (m *LogManager) SetupLogger(jobName string, options RunOptions) (io.WriteCl
 		if defDir, err := getLogDir(); err == nil {
 			logDir = defDir
 		} else {
-			// Fallback to current directory if even getLogDir fails (unlikely)
+			// Fallback to current directory
 			logDir = "."
 		}
 	}
+
+	return filepath.Join(logDir, jobName+"_log.txt"), nil
+}
+
+// SetupLogger resolves the log path and creates a writer
+func (m *LogManager) SetupLogger(jobName string, options RunOptions) (io.WriteCloser, string, error) {
+	fullLogPath, err := ResolveLogPath(jobName, options)
+	if err != nil {
+		return nil, "", err
+	}
+
+	logDir := filepath.Dir(fullLogPath)
 
 	// Ensure final directory exists
 	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
 		return nil, "", fmt.Errorf("failed to create log directory: %w", err)
 	}
-
-	// Calculate full log path
-	fullLogPath := filepath.Join(logDir, jobName+"_log.txt")
 
 	// Create lumberjack logger
 	lLogger := &lumberjack.Logger{

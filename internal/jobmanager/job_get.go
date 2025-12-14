@@ -4,7 +4,6 @@ import (
 	"errors"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 )
@@ -28,14 +27,13 @@ type JobStatusShow struct {
 	LastDuration time.Duration `json:"lastDuration"`
 
 	// Log info
-	HasLog      bool   `json:"hasLog"`
 	RealLogPath string `json:"realLogPath"`
 	LogSize     int64  `json:"size"`
 	LogModTime  string `json:"modTime"`
 }
 
-// 类型转化
-func job2jobStatus(job Job) JobStatusShow {
+// ToStatusShow 转换为对外展示的状态结构
+func (job *Job) ToStatusShow() JobStatusShow {
 	js := JobStatusShow{
 		UUID:         job.UUID,
 		JobName:      job.JobName,
@@ -53,48 +51,14 @@ func job2jobStatus(job Job) JobStatusShow {
 		LastDuration: job.LastDuration,
 	}
 
-	// Populate log info
-	// 1. Use runtime path if available
+	// 填充日志信息
 	if job.runtimeLogPath != "" {
 		js.RealLogPath = job.runtimeLogPath
 	}
 
-	// 2. If no runtime path, try to find existing log file
-	if js.RealLogPath == "" {
-		defaultDir, _ := getLogDir()
-
-		// Check user configured path
-		if job.Options.OutputPath != "" {
-			p := filepath.Join(job.Options.OutputPath, job.JobName+"_log.txt")
-			if st, err := os.Stat(p); err == nil && !st.IsDir() {
-				js.RealLogPath = p
-			}
-		}
-
-		// Check default path if not found yet
-		if js.RealLogPath == "" && defaultDir != "" {
-			p := filepath.Join(defaultDir, job.JobName+"_log.txt")
-			if st, err := os.Stat(p); err == nil && !st.IsDir() {
-				js.RealLogPath = p
-			}
-		}
-
-		// 3. If still not found, set to expected path
-		if js.RealLogPath == "" {
-			targetDir := job.Options.OutputPath
-			if targetDir == "" {
-				targetDir = defaultDir
-			}
-			if targetDir != "" {
-				js.RealLogPath = filepath.Join(targetDir, job.JobName+"_log.txt")
-			}
-		}
-	}
-
-	// Fill details if path is set
+	// 如果路径存在，检查文件状态
 	if js.RealLogPath != "" {
 		if st, err := os.Stat(js.RealLogPath); err == nil && !st.IsDir() {
-			js.HasLog = true
 			js.LogSize = st.Size()
 			js.LogModTime = st.ModTime().Format("2006-01-02 15:04:05")
 		}
@@ -103,50 +67,66 @@ func job2jobStatus(job Job) JobStatusShow {
 	return js
 }
 
-func JobList() []JobStatusShow {
+func (m *Manager) JobList() []JobStatusShow {
 	var jobNameList []JobStatusShow
-	for _, job := range jobConfigV2.TaskList {
-		jobNameList = append(jobNameList, job2jobStatus(*job))
+	for _, job := range m.config.TaskList {
+		jobNameList = append(jobNameList, job.ToStatusShow())
 	}
 	return jobNameList
 }
 
-func getJobByJobId(uuId string) *Job {
-	for _, job := range jobConfigV2.GetResidentTask() {
-		if uuId == job.UUID {
-			return job
-		}
+func JobList() []JobStatusShow {
+	if DefaultManager != nil {
+		return DefaultManager.JobList()
 	}
 	return nil
+}
+
+func (m *Manager) getJobByJobId(uuId string) *Job {
+	return m.config.GetJob(uuId)
+}
+
+func (m *Manager) JobRunResidentTask(jobId string) error {
+	defer m.flushConfig()
+	jh := m.getJobByJobId(jobId)
+	if jh == nil {
+		return errors.New("jobId不存在")
+	}
+	return m.ForceRunJob(jh)
 }
 
 func JobRunResidentTask(jobId string) error {
-	defer flushConfig()
-	jh := getJobByJobId(jobId)
-	if jh == nil {
-		return errors.New("jobId不存在")
+	if DefaultManager != nil {
+		return DefaultManager.JobRunResidentTask(jobId)
 	}
-	return jh.ForceRunJob()
+	return errors.New("manager not initialized")
 }
 
-func JobStopResidentTask(jobId string) error {
-	jh := getJobByJobId(jobId)
+func (m *Manager) JobStopResidentTask(jobId string) error {
+	jh := m.getJobByJobId(jobId)
 	if jh == nil {
 		return errors.New("jobId不存在")
 	}
-	defer flushConfig()
-	jh.StopJob()
+	defer m.flushConfig()
+	m.StopJob(jh)
 	return nil
 }
 
-func StopAll() {
-	StartClose()
+func JobStopResidentTask(jobId string) error {
+	if DefaultManager != nil {
+		return DefaultManager.JobStopResidentTask(jobId)
+	}
+	return errors.New("manager not initialized")
+}
+
+func (m *Manager) StopAll() {
+	m.StartClose()
 	wg := sync.WaitGroup{}
-	for _, item := range jobConfigV2.GetResidentTask() {
+	for _, item := range m.config.GetResidentTask() {
 		slog.Info(item.JobName + "准备退出")
 		wg.Go(func(job *Job) func() {
 			return func() {
-				job.StopJob()
+				m.StopJob(job)
 				slog.Info(job.JobName + "退出")
 			}
 		}(item))
@@ -154,44 +134,46 @@ func StopAll() {
 	wg.Wait()
 }
 
-func RunStartTime() time.Time {
-	return startTime
+func StopAll() {
+	if DefaultManager != nil {
+		DefaultManager.StopAll()
+	}
+}
+
+func (m *Manager) GetHttpConfig() BaseConfig {
+	return m.config.Config
 }
 
 func GetHttpConfig() BaseConfig {
-	return jobConfigV2.Config
-}
-
-func getTaskByTaskId(uuId string) *Job {
-	for _, job := range jobConfigV2.GetScheduledTask() {
-		if uuId == job.UUID {
-			return job
-		}
+	if DefaultManager != nil {
+		return DefaultManager.GetHttpConfig()
 	}
-	return nil
+	return BaseConfig{}
 }
 
-var taskStatusLock sync.Mutex
+func (m *Manager) getTaskByTaskId(uuId string) *Job {
+	return m.config.GetJob(uuId)
+}
 
-func OpenCloseTask(taskId string, run bool) error {
-	taskStatusLock.Lock()
-	defer taskStatusLock.Unlock()
+func (m *Manager) OpenCloseTask(taskId string, run bool) error {
+	m.taskStatusLock.Lock()
+	defer m.taskStatusLock.Unlock()
 
-	job := getTaskByTaskId(taskId)
+	job := m.getTaskByTaskId(taskId)
 	if job == nil {
 		return errors.New("taskId不存在")
 	}
 
-	defer flushConfig()
+	defer m.flushConfig()
 	job.Run = run
 
 	if job.Run {
 		if job.entityId != 0 {
 			return errors.New("任务已注册")
 		}
-		entityId, err := c.AddFunc(job.Spec, func(job *Job) func() {
+		entityId, err := m.cron.AddFunc(job.Spec, func(job *Job) func() {
 			return func() {
-				execAction(job)
+				m.execAction(job)
 			}
 		}(job))
 		if err != nil {
@@ -202,25 +184,39 @@ func OpenCloseTask(taskId string, run bool) error {
 		if job.entityId == 0 {
 			return nil
 		}
-		c.Remove(job.entityId)
+		m.cron.Remove(job.entityId)
 		job.entityId = 0
 	}
 	return nil
 }
 
-func RunTask(taskId string) error {
-	task := getTaskByTaskId(taskId)
+func OpenCloseTask(taskId string, run bool) error {
+	if DefaultManager != nil {
+		return DefaultManager.OpenCloseTask(taskId, run)
+	}
+	return errors.New("manager not initialized")
+}
+
+func (m *Manager) RunTask(taskId string) error {
+	task := m.getTaskByTaskId(taskId)
 	if task == nil {
 		return errors.New("taskId不存在")
 	}
-	return task.RunOnce()
+	return m.RunScheduledJob(task)
 }
 
-func SaveTask(job JobStatusShow) error {
+func RunTask(taskId string) error {
+	if DefaultManager != nil {
+		return DefaultManager.RunTask(taskId)
+	}
+	return errors.New("manager not initialized")
+}
+
+func (m *Manager) SaveTask(job JobStatusShow) error {
 	needFlush := false
 	defer func() {
 		if needFlush {
-			flushConfig()
+			m.flushConfig()
 		}
 	}()
 	if job.UUID == "" {
@@ -238,54 +234,59 @@ func SaveTask(job JobStatusShow) error {
 				Options: job.Options,
 			},
 		}
-		newJob.ConfigInit()
-		jobConfigV2.TaskList = append(jobConfigV2.TaskList, &newJob)
+		m.ConfigInit(&newJob)
+		m.config.AddJob(&newJob)
 		needFlush = true
 	} else {
-		for _, jobItem := range jobConfigV2.TaskList {
-			if jobItem.UUID == job.UUID {
-				if jobItem.Run {
-					return errors.New("任务处于开启状态不允许修改,如需修改请先关闭")
-				}
-				if jobItem.Type != JobType(job.Type) {
-					return errors.New("任务类型不允许修改")
-				}
-				jobItem.JobName = job.JobName
-				jobItem.Run = job.Run
-				jobItem.BinPath = job.BinPath
-				jobItem.Dir = job.Dir
-				jobItem.Spec = job.Spec
-				jobItem.Options = job.Options
-				jobItem.Link = job.Link
-				needFlush = true
+		jobItem := m.config.GetJob(job.UUID)
+		if jobItem != nil {
+			if jobItem.Run {
+				return errors.New("任务处于开启状态不允许修改,如需修改请先关闭")
 			}
+			if jobItem.Type != JobType(job.Type) {
+				return errors.New("任务类型不允许修改")
+			}
+			jobItem.JobName = job.JobName
+			jobItem.Run = job.Run
+			jobItem.BinPath = job.BinPath
+			jobItem.Dir = job.Dir
+			jobItem.Spec = job.Spec
+			jobItem.Options = job.Options
+			jobItem.Link = job.Link
+			needFlush = true
 		}
 	}
 	return nil
 }
 
-func RemoveTask(job JobStatusShow) error {
-	needFlush := false
-	removed := false
-	defer func() {
-		if needFlush {
-			flushConfig()
-		}
-	}()
-
-	for i, jobItem := range jobConfigV2.TaskList {
-		if jobItem.UUID == job.UUID {
-			if jobItem.Run {
-				return errors.New("任务处于开启状态不允许修改,如需修改请先关闭")
-			}
-			needFlush = true
-			jobConfigV2.TaskList = append(jobConfigV2.TaskList[0:i], jobConfigV2.TaskList[i+1:]...)
-			removed = true
-			break
-		}
+func SaveTask(job JobStatusShow) error {
+	if DefaultManager != nil {
+		return DefaultManager.SaveTask(job)
 	}
-	if !removed {
+	return errors.New("manager not initialized")
+}
+
+func (m *Manager) RemoveTask(job JobStatusShow) error {
+	defer m.flushConfig()
+
+	jobItem := m.config.GetJob(job.UUID)
+	if jobItem == nil {
 		return errors.New("任务不存在或已删除")
 	}
-	return nil
+
+	if jobItem.Run {
+		return errors.New("任务处于开启状态不允许修改,如需修改请先关闭")
+	}
+
+	if m.config.RemoveJob(job.UUID) {
+		return nil
+	}
+	return errors.New("任务删除失败")
+}
+
+func RemoveTask(job JobStatusShow) error {
+	if DefaultManager != nil {
+		return DefaultManager.RemoveTask(job)
+	}
+	return errors.New("manager not initialized")
 }

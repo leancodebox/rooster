@@ -1,122 +1,40 @@
 package jobmanager
 
 import (
-	"context"
 	"fmt"
-	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
 )
 
-func TestName(t *testing.T) {
-	//ctx := context.Background()
-	//cmd := exec.CommandContext(ctx,"echo","1212")
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	go func() {
-		select {
-		case <-ctx.Done():
-			t.Log("done")
-		}
-	}()
-
-	t.Log("waitCancel")
-	cancel()
-	t.Log("123454321")
-	time.Sleep(time.Second * 3)
+func createTestManager() *Manager {
+	return &Manager{
+		config: JobConfig{
+			Config: BaseConfig{
+				DefaultOptions: RunOptions{OutputType: OutputTypeFile, OutputPath: "/tmp", MaxFailures: 5},
+			},
+		},
+		cron:      cron.New(),
+		startTime: time.Now(),
+	}
 }
 
-func TestSH(t *testing.T) {
-
-	sendFromAdmin := make(chan bool)
-	defer func() {
-		close(sendFromAdmin)
-	}()
-	cmdIsLife := true
-	// 外层的 gochannel 负责重启
-	go func() {
-		sendToParent := make(chan bool)
-		defer func() {
-			cmdIsLife = false
-			close(sendToParent)
-		}()
-		consecutiveFailures := 0
-		for {
-			// build start
-			unitStartTime := time.Now()
-			ctx, cancel := context.WithCancel(context.Background())
-			cmd := exec.CommandContext(ctx, "/bin/bash", "-lc", "for i in {1..3}; do echo loop-$i; sleep 0.1; done")
-			cmd.Stdout = os.Stdout
-			// build end
-			go func() {
-				defer func() {
-					if err := recover(); err != nil {
-						t.Log("panic", err)
-					}
-					sendToParent <- true
-				}()
-				// 准备启动
-				if err := cmd.Start(); err != nil {
-					slog.Error("cmd.start", "err", err.Error())
-				}
-				if err := cmd.Wait(); err != nil {
-					slog.Error("cmd.start", "err", err.Error())
-				}
-			}()
-			observe := false
-			for {
-				select {
-				case <-sendFromAdmin:
-					cancel()
-				case <-sendToParent:
-					observe = true
-				}
-				if observe {
-					break
-				}
-			}
-			executionTime := time.Since(unitStartTime)
-			if executionTime <= maxExecutionTime {
-				consecutiveFailures += 1
-			} else {
-				consecutiveFailures = 0
-			}
-
-			if consecutiveFailures >= maxConsecutiveFailures {
-				msg := "程序连续3次启动失败，停止重启"
-				slog.Info(msg)
-				break
-			} else {
-				msg := "程序终止尝试重新运行"
-				slog.Info(msg)
-			}
-		}
-
-	}()
-
-	time.Sleep(time.Second * 1)
-	if cmdIsLife {
-		sendFromAdmin <- true
-	}
-	time.Sleep(time.Second * 2)
-
-	if cmdIsLife {
-		sendFromAdmin <- true
-	}
-	time.Sleep(time.Second * 4)
-}
-
-func TestExecActionSetsStatusAndObservables(t *testing.T) {
+func mockHomeDir(t *testing.T) (string, func()) {
 	tmpDir := t.TempDir()
 	oldHome := userHomeDirFn
 	userHomeDirFn = func() (string, error) { return tmpDir, nil }
-	defer func() { userHomeDirFn = oldHome }()
+	return tmpDir, func() { userHomeDirFn = oldHome }
+}
+
+func TestExecActionSetsStatusAndObservables(t *testing.T) {
+	m := createTestManager()
+	tmpDir, cleanup := mockHomeDir(t)
+	defer cleanup()
+
 	logDir, _ := getLogDir()
 	job := Job{
 		JobSpec: JobSpec{
@@ -129,8 +47,8 @@ func TestExecActionSetsStatusAndObservables(t *testing.T) {
 			Options: RunOptions{OutputType: OutputTypeFile, OutputPath: logDir},
 		},
 	}
-	job.ConfigInit()
-	execAction(&job)
+	m.ConfigInit(&job)
+	m.execAction(&job)
 	if job.status != Stop {
 		t.Fatalf("status not Stop: %v", job.status)
 	}
@@ -169,43 +87,94 @@ func TestGetConfigPath_ErrorHomeDir(t *testing.T) {
 }
 
 func TestScheduleV2_StartAndStop(t *testing.T) {
+	m := createTestManager()
+	_, cleanup := mockHomeDir(t)
+	defer cleanup()
+
 	// ensure cron starts and can be stopped
 	job := &Job{JobSpec: JobSpec{UUID: generateUUID(), JobName: "cron-echo", Type: JobTypeScheduled, Run: true, BinPath: "/bin/echo hi"}}
-	scheduleV2([]*Job{job})
+	m.scheduleV2([]*Job{job})
 	// stop immediately
-	c.Stop()
+	m.cron.Stop()
 }
 
 func TestJobGuard_FailureBackoffWithoutSleep(t *testing.T) {
+	m := createTestManager()
+	_, cleanup := mockHomeDir(t)
+	defer cleanup()
+
 	// replace sleep to speed up
 	old := sleepFn
 	sleepFn = func(d time.Duration) {}
 	defer func() { sleepFn = old }()
 
 	j := &Job{JobSpec: JobSpec{UUID: generateUUID(), JobName: "fast-exit", Type: JobTypeResident, Run: true, BinPath: "/bin/echo x", Options: RunOptions{MaxFailures: 1, MinRunSeconds: int(maxExecutionTime.Seconds()) + 1}}}
-	j.ConfigInit()
+	m.ConfigInit(j)
 	// make command exit quickly
 	done := make(chan struct{})
-	go func() { j.jobGuard(); close(done) }()
+	go func() { m.runResidentJobLoop(j); close(done) }()
 	// allow guard to run once and stop due to MaxFailures
 	<-done
 }
 
 func TestStopJobCancelsContext(t *testing.T) {
-	tmpDir := t.TempDir()
+	m := createTestManager()
+	tmpDir, cleanup := mockHomeDir(t)
+	defer cleanup()
+
 	j := &Job{JobSpec: JobSpec{UUID: generateUUID(), JobName: "stop-sleep", Type: JobTypeResident, Run: true, BinPath: "sleep 2", Dir: tmpDir, Options: RunOptions{ShellPath: "/bin/bash"}}}
-	j.ConfigInit()
-	if err := j.JobInit(); err != nil {
+	m.ConfigInit(j)
+	if err := m.StartResidentJob(j); err != nil {
 		t.Fatalf("JobInit err: %v", err)
 	}
 	time.Sleep(100 * time.Millisecond)
-	j.StopJob()
+	m.StopJob(j)
+
+	// Wait a bit for goroutine to exit
+	time.Sleep(100 * time.Millisecond)
 }
 
 func TestClosedAndStartClose_Last(t *testing.T) {
+	m := createTestManager()
+	DefaultManager = m
 	// place last to avoid affecting other tests
 	StartClose()
 	if !Closed() {
 		t.Fatalf("Closed not true after StartClose")
+	}
+}
+
+func TestRuntimeLogPathInit(t *testing.T) {
+	m := createTestManager()
+	tmpDir := t.TempDir()
+
+	job := &Job{
+		JobSpec: JobSpec{
+			UUID:    generateUUID(),
+			JobName: "test-logpath",
+			Options: RunOptions{
+				OutputType: OutputTypeFile,
+				OutputPath: tmpDir,
+			},
+		},
+	}
+
+	// ConfigInit should set runtimeLogPath
+	m.ConfigInit(job)
+
+	// Verify runtimeLogPath is set
+	if job.runtimeLogPath == "" {
+		t.Fatal("runtimeLogPath should be set by ConfigInit")
+	}
+
+	expectedPath := filepath.Join(tmpDir, "test-logpath_log.txt")
+	if job.runtimeLogPath != expectedPath {
+		t.Errorf("expected path %s, got %s", expectedPath, job.runtimeLogPath)
+	}
+
+	// Verify ToStatusShow uses it
+	status := job.ToStatusShow()
+	if status.RealLogPath != expectedPath {
+		t.Errorf("ToStatusShow RealLogPath expected %s, got %s", expectedPath, status.RealLogPath)
 	}
 }

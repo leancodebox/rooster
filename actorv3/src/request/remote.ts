@@ -38,14 +38,6 @@ export function restartJob(jobId: any) {
     return instanceAxios.post('restart-job-resident-task', {jobId})
 }
 
-export function getJobLog(jobId: any, lines = 200, bytes = 0) {
-    return instanceAxios.get('job-log', {params: {jobId, lines, bytes}})
-}
-
-export function downloadJobLog(jobId: any) {
-    return instanceAxios.get('job-log-download', {params: {jobId}, responseType: 'blob'})
-}
-
 export function getHomePath() {
     return instanceAxios.get('home-path')
 }

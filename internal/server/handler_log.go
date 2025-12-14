@@ -1,120 +1,169 @@
 package server
 
 import (
-	"fmt"
 	"io"
-	"net/http"
+	"log/slog"
 	"os"
+	"strconv"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
+	"github.com/gin-contrib/sse"
 	"github.com/gin-gonic/gin"
 )
-
-func handleJobLog(c *gin.Context) {
-	jobId := c.Query("jobId")
-	lines := 200
-	bytes := 0
-	if v := c.Query("lines"); v != "" {
-		fmt.Sscanf(v, "%d", &lines)
-	}
-	if v := c.Query("bytes"); v != "" {
-		fmt.Sscanf(v, "%d", &bytes)
-	}
-	j, ok := getJobStatusById(jobId)
-	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"message": "jobId不存在"})
-		return
-	}
-	lp, ok := getJobLogPath(j)
-	maxBytes := 2 * 1024 * 1024
-	if bytes <= 0 {
-		bytes = 0
-	}
-	if ok {
-		data, err := readTail(lp, lines, bytes, maxBytes)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"content": string(data)})
-		return
-	}
-	c.JSON(http.StatusBadRequest, gin.H{"message": "日志文件不存在或路径无效"})
-}
-
-func handleJobLogDownload(c *gin.Context) {
-	jobId := c.Query("jobId")
-	j, ok := getJobStatusById(jobId)
-	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"message": "jobId不存在"})
-		return
-	}
-	lp, ok := getJobLogPath(j)
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "未开启文件日志或路径无效"})
-		return
-	}
-	c.Header("Content-Type", "text/plain; charset=utf-8")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s_log.txt\"", j.JobName))
-	c.File(lp)
-}
 
 func handleJobLogStream(c *gin.Context) {
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache")
 	c.Writer.Header().Set("Connection", "keep-alive")
+
 	jobId := c.Query("jobId")
 	j, ok := getJobStatusById(jobId)
 	if !ok {
-		c.String(http.StatusNotFound, "")
+		// If job not found, close stream
 		return
 	}
 	lp, ok := getJobLogPath(j)
 	if !ok {
-		c.String(http.StatusBadRequest, "")
 		return
 	}
+
 	f, err := os.Open(lp)
 	if err != nil {
-		c.String(http.StatusInternalServerError, "")
+		// If file doesn't exist, return. Client will retry.
 		return
 	}
 	defer f.Close()
-	pos := int64(0)
-	if st, err := f.Stat(); err == nil {
-		pos = st.Size()
+
+	// Determine start offset
+	st, err := f.Stat()
+	if err != nil {
+		return
 	}
-	lastEmit := time.Now()
-	for {
-		if c.Request.Context().Err() != nil {
-			break
-		}
-		st, err := os.Stat(lp)
-		if err != nil {
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
-		size := st.Size()
-		if size < pos {
-			pos = 0
-		}
-		if size > pos {
-			_, _ = f.Seek(pos, io.SeekStart)
-			buf := make([]byte, size-pos)
-			n, _ := io.ReadFull(f, buf)
-			pos += int64(n)
-			c.Writer.Write([]byte("data: "))
-			c.Writer.Write(buf[:n])
-			c.Writer.Write([]byte("\n\n"))
-			c.Writer.Flush()
-			lastEmit = time.Now()
-		} else {
-			if time.Since(lastEmit) >= 10*time.Second {
-				c.Writer.Write([]byte(": keep-alive\n\n"))
-				c.Writer.Flush()
-				lastEmit = time.Now()
+	fileSize := st.Size()
+	offset := int64(0)
+
+	lastEventId := c.GetHeader("Last-Event-ID")
+	if lastEventId != "" {
+		// Try to resume from last offset
+		if lastOffset, err := strconv.ParseInt(lastEventId, 10, 64); err == nil {
+			if lastOffset >= 0 && lastOffset <= fileSize {
+				offset = lastOffset
 			}
 		}
-		time.Sleep(500 * time.Millisecond)
+	} else {
+		// Initial connection: send tail (last 20KB)
+		initBytes := 20 * 1024
+		if fileSize > int64(initBytes) {
+			offset = fileSize - int64(initBytes)
+		}
+	}
+
+	// Send content from offset to current end
+	if offset < fileSize {
+		_, _ = f.Seek(offset, io.SeekStart)
+		buf := make([]byte, fileSize-offset)
+		n, _ := io.ReadFull(f, buf)
+		if n > 0 {
+			newOffset := offset + int64(n)
+			_ = sse.Encode(c.Writer, sse.Event{
+				Id:    strconv.FormatInt(newOffset, 10),
+				Event: "message",
+				Data:  string(buf[:n]),
+			})
+			c.Writer.Flush() // Flush is required to send data immediately
+			offset = newOffset
+		}
+	}
+
+	// Watch for changes
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		slog.Error("fsnotify error", "err", err)
+		return
+	}
+	defer watcher.Close()
+
+	if err = watcher.Add(lp); err != nil {
+		slog.Error("fsnotify add error", "err", err)
+		return
+	}
+
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-shutdownCtx.Done():
+			return
+		case <-c.Request.Context().Done():
+			return
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			if event.Has(fsnotify.Write) {
+				st, err := os.Stat(lp)
+				if err != nil {
+					continue
+				}
+				newSize := st.Size()
+
+				if newSize < offset {
+					// File truncated
+					offset = 0
+					_, _ = f.Seek(0, io.SeekStart)
+				}
+
+				if newSize > offset {
+					readSize := newSize - offset
+					// Limit read size to avoid huge allocations if file grew a lot instantly
+					if readSize > 1024*1024 {
+						readSize = 1024 * 1024
+					}
+
+					buf := make([]byte, readSize)
+					_, _ = f.Seek(offset, io.SeekStart)
+					n, err := io.ReadFull(f, buf)
+					if err == nil && n > 0 {
+						newOffset := offset + int64(n)
+						err := sse.Encode(c.Writer, sse.Event{
+							Id:    strconv.FormatInt(newOffset, 10),
+							Event: "message",
+							Data:  string(buf[:n]),
+						})
+						if err != nil {
+							slog.Error("sse encode error", "err", err)
+							return
+						}
+						c.Writer.Flush() // Flush is required
+						offset = newOffset
+					}
+				}
+			}
+			if event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename) {
+				slog.Info("log file removed or renamed")
+				return
+			}
+		case <-ticker.C:
+			if c.Request.Context().Err() != nil {
+				return
+			}
+			// Send a ping event for client watchdog
+			err := sse.Encode(c.Writer, sse.Event{
+				Event: "ping",
+				Data:  time.Now().Format(time.RFC3339),
+			})
+			if err != nil {
+				slog.Error("sse heartbeat error", "err", err)
+				return
+			}
+			c.Writer.Flush()
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				slog.Info("watcher error channel closed")
+				return
+			}
+			slog.Error("watcher error", "err", err)
+		}
 	}
 }

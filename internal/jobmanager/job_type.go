@@ -51,7 +51,7 @@ const (
 	JobTypeScheduled JobType = 2
 )
 
-// JobSpec defines the static configuration of a job
+// JobSpec 定义任务的静态配置
 type JobSpec struct {
 	UUID    string     `json:"uuid"`
 	JobName string     `json:"jobName"`
@@ -64,21 +64,32 @@ type JobSpec struct {
 	Options RunOptions `json:"options"` // 运行选项
 }
 
-// JobRuntime defines the dynamic runtime state of a job
+// RunStatus 运行状态
+type RunStatus int
+
+const (
+	Stop    RunStatus = 0
+	Running RunStatus = 1
+)
+
+// JobRuntime 定义任务的动态运行时状态
 type JobRuntime struct {
-	status   RunStatus
-	confLock *sync.Mutex
-	cancel   context.CancelFunc
+	status   RunStatus          `json:"-"`
+	confLock *sync.Mutex        `json:"-"`
+	cancel   context.CancelFunc `json:"-"`
 
-	entityId    cron.EntryID
-	runOnceLock *sync.Mutex
+	entityId    cron.EntryID `json:"-"`
+	runOnceLock *sync.Mutex  `json:"-"`
 
-	LastStart    time.Time
-	LastExit     time.Time
-	LastExitCode int
-	LastDuration time.Duration
+	Pid         int  `json:"-"`
+	RunningLoop bool `json:"-"`
 
-	runtimeLogPath string
+	LastStart    time.Time     `json:"-"`
+	LastExit     time.Time     `json:"-"`
+	LastExitCode int           `json:"-"`
+	LastDuration time.Duration `json:"-"`
+
+	runtimeLogPath string `json:"-"`
 }
 
 // Job 表示任务及其运行时状态
@@ -121,4 +132,27 @@ func (itself *JobConfig) GetScheduledTask() []*Job {
 		}
 	}
 	return r
+}
+
+func (itself *JobConfig) GetJob(uuid string) *Job {
+	for _, job := range itself.TaskList {
+		if job.UUID == uuid {
+			return job
+		}
+	}
+	return nil
+}
+
+func (itself *JobConfig) AddJob(job *Job) {
+	itself.TaskList = append(itself.TaskList, job)
+}
+
+func (itself *JobConfig) RemoveJob(uuid string) bool {
+	for i, job := range itself.TaskList {
+		if job.UUID == uuid {
+			itself.TaskList = append(itself.TaskList[:i], itself.TaskList[i+1:]...)
+			return true
+		}
+	}
+	return false
 }

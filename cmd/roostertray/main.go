@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"runtime"
 
 	"fyne.io/fyne/v2"
@@ -17,91 +17,139 @@ import (
 	"github.com/leancodebox/rooster/internal/server"
 )
 
-func logLifecycle(a fyne.App) {
-	a.Lifecycle().SetOnStarted(func() {
+const (
+	appID   = "com.leancodebox.rooster"
+	appName = "rooster-desktop"
+)
+
+func main() {
+	setupLogger()
+
+	a := app.NewWithID(appID)
+	a.SetIcon(assets.GetAppIcon())
+
+	setupLifecycle(a)
+
+	// Initialize Tray with loading state
+	setupTray(a)
+
+	// Start Server in background
+	go runServer(a)
+
+	a.Run()
+}
+
+func setupLogger() {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		slog.Error("Failed to get home directory", "err", err)
+		homeDir = "tmp"
+	}
+
+	logDir := filepath.Join(homeDir, ".roosterTaskConfig")
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		slog.Error("Failed to create log directory", "err", err)
+	}
+
+	runLogPath := filepath.Join(logDir, "run.log")
+	logOut, err := os.OpenFile(runLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		slog.Info("Failed to log to file, using default stderr", "err", err)
+		return
+	}
+
+	slog.SetDefault(slog.New(slog.NewJSONHandler(logOut, &slog.HandlerOptions{
+		AddSource: true,
+	})))
+}
+
+func setupLifecycle(a fyne.App) {
+	lifecycle := a.Lifecycle()
+	lifecycle.SetOnStarted(func() {
 		slog.Info("Lifecycle: Started")
 	})
-	a.Lifecycle().SetOnStopped(func() {
+	lifecycle.SetOnStopped(func() {
 		slog.Info("Lifecycle: Stop")
 		server.ServeStop()
 	})
-	a.Lifecycle().SetOnEnteredForeground(func() {
+	lifecycle.SetOnEnteredForeground(func() {
 		slog.Info("Lifecycle: Entered Foreground")
 	})
-	a.Lifecycle().SetOnExitedForeground(func() {
+	lifecycle.SetOnExitedForeground(func() {
 		slog.Info("Lifecycle: Exited Foreground")
 	})
 }
 
-func main() {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		slog.Error("获取家目录失败", "err", err)
-		homeDir = "tmp"
+func setupTray(a fyne.App) {
+	desk, ok := a.(desktop.App)
+	if !ok {
+		return
 	}
-	runLogPath := path.Join(homeDir, ".roosterTaskConfig", "run.log")
-	logOut, err := os.OpenFile(runLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		slog.Info("Failed to log to file, using default stderr", "err", err)
-	}
-	slog.SetDefault(slog.New(slog.NewJSONHandler(logOut, &slog.HandlerOptions{
-		AddSource: true,
-	})))
-	roosterApp := app.NewWithID("com.leancodebox.rooster")
-	logLifecycle(roosterApp)
-	roosterApp.SetIcon(assets.GetAppIcon())
-	// 桌面系统设置托盘
-	if desk, ok := roosterApp.(desktop.App); ok {
-		desk.SetSystemTrayIcon(theme.ListIcon())
-		var list []*fyne.MenuItem
-		m := fyne.NewMenu("rooster-desktop")
-		list = append(list, fyne.NewMenuItem("启动中...", nil))
-		desk.SetSystemTrayMenu(m)
-	}
-	go func() {
-		serverErr := startRoosterServer()
-		port := server.GetPort()
-		url := fmt.Sprintf("http://localhost:%d/actor/", port)
-		// 桌面系统设置托盘
-		if desk, ok := roosterApp.(desktop.App); ok {
-			var list []*fyne.MenuItem
-			open := fyne.NewMenuItem("打开管理", func() {
-				err := openURL(url)
-				if err != nil {
-					slog.Info(err.Error())
-				}
-			})
-			list = append(list, open)
-			list = append(list, fyne.NewMenuItem(fmt.Sprintf("端口: %d", port), nil))
-			if serverErr != nil {
-				list = append(list, fyne.NewMenuItem(serverErr.Error(), func() {
-					err := openURL(url)
-					if err != nil {
-						slog.Info(err.Error())
-					}
-				}))
-			} else {
-				if port > 0 {
-					err := openURL(url)
-					if err != nil {
-						slog.Info(err.Error())
-					}
-				}
-			}
 
-			m := fyne.NewMenu("rooster-desktop",
-				list...,
-			)
-			desk.SetSystemTrayMenu(m)
+	desk.SetSystemTrayIcon(theme.ListIcon())
+	// Initial menu state
+	updateTrayMenu(desk, []*fyne.MenuItem{
+		fyne.NewMenuItem("启动中...", nil),
+	})
+}
+
+func updateTrayMenu(desk desktop.App, items []*fyne.MenuItem) {
+	desk.SetSystemTrayMenu(fyne.NewMenu(appName, items...))
+}
+
+func runServer(a fyne.App) {
+	serverErr := startRoosterServer()
+	port := server.GetPort()
+	url := fmt.Sprintf("http://localhost:%d/actor/", port)
+
+	desk, ok := a.(desktop.App)
+	if !ok {
+		return
+	}
+
+	var menuItems []*fyne.MenuItem
+
+	// Open Management Item
+	openItem := fyne.NewMenuItem("打开管理", func() {
+		if err := openURL(url); err != nil {
+			slog.Error("Failed to open URL", "err", err)
 		}
-	}()
-	//roosterSay.InitFyneApp(roosterApp)
-	roosterApp.Run()
+	})
+	menuItems = append(menuItems, openItem)
+
+	// Port Info
+	menuItems = append(menuItems, fyne.NewMenuItem(fmt.Sprintf("端口: %d", port), nil))
+
+	// Error Handling
+	if serverErr != nil {
+		errItem := fyne.NewMenuItem(fmt.Sprintf("启动错误: %v", serverErr), func() {
+			// Allow opening URL even if there's an error reported, similar to original logic
+			if err := openURL(url); err != nil {
+				slog.Error("Failed to open URL", "err", err)
+			}
+		})
+		menuItems = append(menuItems, errItem)
+	} else if port > 0 {
+		// Auto open on success
+		if err := openURL(url); err != nil {
+			slog.Error("Failed to auto-open URL", "err", err)
+		}
+	}
+
+	// Update menu safely on main thread is usually handled by Fyne,
+	// but SetSystemTrayMenu is generally thread-safe or handles it.
+
+	// Add Quit item
+	menuItems = append(menuItems, fyne.NewMenuItemSeparator())
+	menuItems = append(menuItems, fyne.NewMenuItem("退出", func() {
+		a.Quit()
+	}))
+
+	updateTrayMenu(desk, menuItems)
 }
 
 func startRoosterServer() error {
-	err := jobmanager.RegByUserConfig()
-	if err != nil {
+	if err := jobmanager.RegByUserConfig(); err != nil {
 		return err
 	}
 	server.ServeRun()
@@ -109,23 +157,24 @@ func startRoosterServer() error {
 }
 
 func openURL(url string) error {
-	var cmd string
+	var cmdName string
 	var args []string
 
 	switch runtime.GOOS {
 	case "windows":
-		cmd = "cmd"
+		cmdName = "cmd"
 		args = []string{"/c", "start", url}
 	case "darwin":
-		cmd = "open"
+		cmdName = "open"
 		args = []string{url}
 	case "linux":
-		cmd = "xdg-open"
+		cmdName = "xdg-open"
 		args = []string{url}
 	default:
-		return fmt.Errorf("unsupported platform")
+		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
-	runCmd := exec.Command(cmd, args...)
+
+	runCmd := exec.Command(cmdName, args...)
 	jobmanager.HideWindows(runCmd)
 	return runCmd.Start()
 }

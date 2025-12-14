@@ -27,3 +27,4 @@ tmp
 .DS_Store
 /rooster-desktop.app
 /.trae
+.roosterTaskConfig
