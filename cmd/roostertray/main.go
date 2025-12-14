@@ -31,10 +31,10 @@ func main() {
 	setupLifecycle(a)
 
 	// Initialize Tray with loading state
-	setupTray(a)
+	menu := setupTray(a)
 
 	// Start Server in background
-	go runServer(a)
+	go runServer(a, menu)
 
 	a.Run()
 }
@@ -80,34 +80,26 @@ func setupLifecycle(a fyne.App) {
 	})
 }
 
-func setupTray(a fyne.App) {
+func setupTray(a fyne.App) *fyne.Menu {
 	desk, ok := a.(desktop.App)
 	if !ok {
-		return
+		return nil
 	}
 
 	desk.SetSystemTrayIcon(theme.ListIcon())
 	// Initial menu state
-	updateTrayMenu(desk, []*fyne.MenuItem{
-		fyne.NewMenuItem("启动中...", nil),
-	})
+	menu := fyne.NewMenu(appName, fyne.NewMenuItem("启动中...", nil))
+	desk.SetSystemTrayMenu(menu)
+	return menu
 }
 
-func updateTrayMenu(desk desktop.App, items []*fyne.MenuItem) {
-	desk.SetSystemTrayMenu(fyne.NewMenu(appName, items...))
-}
-
-func runServer(a fyne.App) {
+func runServer(a fyne.App, menu *fyne.Menu) {
 	serverErr := startRoosterServer()
 	port := server.GetPort()
 	url := fmt.Sprintf("http://localhost:%d/actor/", port)
 
-	desk, ok := a.(desktop.App)
-	if !ok {
-		return
-	}
-
-	var menuItems []*fyne.MenuItem
+	// Rebuild the menu items from scratch
+	var newMenuItems []*fyne.MenuItem
 
 	// Open Management Item
 	openItem := fyne.NewMenuItem("打开管理", func() {
@@ -115,10 +107,10 @@ func runServer(a fyne.App) {
 			slog.Error("Failed to open URL", "err", err)
 		}
 	})
-	menuItems = append(menuItems, openItem)
+	newMenuItems = append(newMenuItems, openItem)
 
 	// Port Info
-	menuItems = append(menuItems, fyne.NewMenuItem(fmt.Sprintf("端口: %d", port), nil))
+	newMenuItems = append(newMenuItems, fyne.NewMenuItem(fmt.Sprintf("端口: %d", port), nil))
 
 	// Error Handling
 	if serverErr != nil {
@@ -128,7 +120,7 @@ func runServer(a fyne.App) {
 				slog.Error("Failed to open URL", "err", err)
 			}
 		})
-		menuItems = append(menuItems, errItem)
+		newMenuItems = append(newMenuItems, errItem)
 	} else if port > 0 {
 		// Auto open on success
 		if err := openURL(url); err != nil {
@@ -136,16 +128,27 @@ func runServer(a fyne.App) {
 		}
 	}
 
-	// Update menu safely on main thread is usually handled by Fyne,
-	// but SetSystemTrayMenu is generally thread-safe or handles it.
-
-	// Add Quit item
-	menuItems = append(menuItems, fyne.NewMenuItemSeparator())
-	menuItems = append(menuItems, fyne.NewMenuItem("退出", func() {
+	// NOTE: Fyne usually appends a "Quit" item automatically in systray menus on some platforms.
+	// If it doesn't, or if we want an explicit one, we can add it.
+	// Based on user feedback, it seems items were duplicated/appended.
+	// To avoid duplicates, we rely on Fyne's default behavior for Quit if present,
+	// OR we assume that by refreshing the SAME menu object, we avoid the append issue.
+	// Let's adding Quit explicitly but safely.
+	newMenuItems = append(newMenuItems, fyne.NewMenuItemSeparator())
+	newMenuItems = append(newMenuItems, fyne.NewMenuItem("退出", func() {
 		a.Quit()
 	}))
 
-	updateTrayMenu(desk, menuItems)
+	// Update the existing menu object
+	if menu != nil {
+		menu.Items = newMenuItems
+		menu.Refresh()
+	} else {
+		// Fallback if setupTray failed or wasn't called (though it is in main)
+		if desk, ok := a.(desktop.App); ok {
+			desk.SetSystemTrayMenu(fyne.NewMenu(appName, newMenuItems...))
+		}
+	}
 }
 
 func startRoosterServer() error {
