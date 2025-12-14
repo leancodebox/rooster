@@ -14,15 +14,15 @@ func HideWindows(cmd *exec.Cmd) {
 
 // KillProcessGroup 在 Windows 上终止进程
 func KillProcessGroup(cmd *exec.Cmd) error {
-    if cmd == nil || cmd.Process == nil {
-        return nil
-    }
-    return cmd.Process.Kill()
+	if cmd == nil || cmd.Process == nil {
+		return nil
+	}
+	return cmd.Process.Kill()
 }
 
 func ForceKillProcessGroup(cmd *exec.Cmd) error {
-    if cmd == nil || cmd.Process == nil {
-        return nil
-    }
-    return cmd.Process.Kill()
+	if cmd == nil || cmd.Process == nil {
+		return nil
+	}
+	return cmd.Process.Kill()
 }

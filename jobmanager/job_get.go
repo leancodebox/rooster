@@ -164,7 +164,6 @@ func SaveTask(job JobStatusShow) error {
 	defer func() {
 		if needFlush == true {
 			flushConfig()
-
 		}
 	}()
 	if job.UUID == "" {

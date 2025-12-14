@@ -22,6 +22,8 @@ const resident = ref<any[]>([])
 const scheduled = ref<any[]>([])
 const showModal = ref(false)
 const showLogModal = ref(false)
+const showDeleteModal = ref(false)
+const pendingDeleteUuid = ref('')
 const logContent = ref('')
 const logInfo = ref<any>({hasLog: false, logPath: '', size: 0, modTime: '', uuid: ''})
 const logOrigin = ref<'文件' | '内存' | ''>('')
@@ -178,6 +180,20 @@ async function refresh() {
   scheduled.value = data.value.filter((x) => x.type === 2)
 }
 
+async function onRemove(uuid: string) {
+  pendingDeleteUuid.value = uuid
+  showDeleteModal.value = true
+}
+
+async function confirmDelete() {
+  if (pendingDeleteUuid.value) {
+    await removeTask(pendingDeleteUuid.value)
+    await refresh()
+    showDeleteModal.value = false
+    pendingDeleteUuid.value = ''
+  }
+}
+
 function confirmStatus(jobId: string, check: (row: any) => boolean, retries = 10, interval = 300) {
   let count = 0
   const h = setInterval(async () => {
@@ -315,7 +331,7 @@ onUnmounted(() => {
                   <button class="btn btn-sm join-item" @click="edit(row)" title="编辑" aria-label="编辑"><i
                       class="fa-solid fa-pen-to-square text-sm"></i></button>
                   <button class="btn btn-sm join-item" :disabled="row.run===true"
-                          @click="removeTask(row.uuid).then(refresh)" title="删除" aria-label="删除"><i
+                          @click="onRemove(row.uuid)" title="删除" aria-label="删除"><i
                       class="fa-solid fa-trash text-sm"></i></button>
                   <button class="btn btn-sm join-item" :disabled="!logMapById[row.uuid]?.hasLog" @click="viewLog(row)"
                           :title="logMapById[row.uuid]?.hasLog ? (logMapById[row.uuid]?.logPath ? '日志(文件)' : '日志(内存)') : '日志(未开启)'"
@@ -356,8 +372,8 @@ onUnmounted(() => {
                     <button class="btn btn-sm join-item" @click="edit(row)" title="编辑" aria-label="编辑"><i
                         class="fa-solid fa-pen-to-square text-sm"></i></button>
                     <button class="btn btn-sm join-item" :disabled="row.run===true"
-                            @click="removeTask(row.uuid).then(refresh)" title="删除" aria-label="删除"><i
-                        class="fa-solid fa-trash text-sm"></i></button>
+                          @click="onRemove(row.uuid)" title="删除" aria-label="删除"><i
+                      class="fa-solid fa-trash text-sm"></i></button>
                     <button class="btn btn-sm join-item" :disabled="!logMapById[row.uuid]?.hasLog" @click="viewLog(row)"
                             :title="logMapById[row.uuid]?.hasLog ? (logMapById[row.uuid]?.logPath ? '日志(文件)' : '日志(内存)') : '日志(未开启)'"
                             aria-label="查看日志"><i class="fa-regular fa-file-lines text-sm"></i></button>
@@ -438,6 +454,16 @@ onUnmounted(() => {
               class="fa-solid fa-download text-xl"></i></button>
           <button class="btn" @click="showLogModal=false; stopStreaming()" title="关闭" aria-label="关闭"><i
               class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+      </div>
+    </div>
+    <div v-if="showDeleteModal" class="modal modal-open">
+      <div class="modal-box">
+        <h3 class="font-bold text-lg">确认删除</h3>
+        <p class="py-4">确定要删除这个任务吗？此操作无法撤销。</p>
+        <div class="modal-action">
+          <button class="btn btn-error" @click="confirmDelete">删除</button>
+          <button class="btn" @click="showDeleteModal=false">取消</button>
         </div>
       </div>
     </div>
