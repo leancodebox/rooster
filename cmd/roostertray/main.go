@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -138,6 +139,7 @@ func runServer(a fyne.App, menu *fyne.Menu) {
 	newMenuItems = append(newMenuItems, fyne.NewMenuItem("退出", func() {
 		a.Quit()
 	}))
+	time.Sleep(1000 * time.Millisecond)
 	if desk, ok := a.(desktop.App); ok {
 		desk.SetSystemTrayMenu(fyne.NewMenu(appName, newMenuItems...))
 	}

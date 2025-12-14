@@ -453,7 +453,10 @@ onUnmounted(() => {
     </div>
 
     <div v-if="showLogModal" class="modal modal-open">
-      <div class="modal-box w-11/12 max-w-6xl">
+      <div class="modal-box w-11/12 max-w-6xl h-[90vh] flex flex-col relative">
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @click="showLogModal=false; stopStreaming()" title="关闭" aria-label="关闭">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
         <h3 class="font-bold text-lg">日志查看</h3>
         <div class="py-2">路径: {{ logInfo.realLogPath || '-' }} | 大小: {{ logInfo.size }} |
           更新时间: {{ logInfo.modTime || '-' }}
@@ -474,11 +477,7 @@ onUnmounted(() => {
             <input type="checkbox" class="toggle toggle-sm" v-model="autoScroll"/>
           </label>
         </div>
-        <div ref="terminalContainerRef" class="h-[600px] bg-[#1e1e1e] rounded overflow-hidden"></div>
-        <div class="modal-action">
-          <button class="btn" @click="showLogModal=false; stopStreaming()" title="关闭" aria-label="关闭"><i
-              class="fa-solid fa-xmark text-xl"></i></button>
-        </div>
+        <div ref="terminalContainerRef" class="flex-1 bg-[#1e1e1e] rounded overflow-hidden"></div>
       </div>
     </div>
     <div v-if="showDeleteModal" class="modal modal-open">
