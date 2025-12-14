@@ -76,6 +76,8 @@ type Job struct {
 	LastExit     time.Time
 	LastExitCode int
 	LastDuration time.Duration
+
+	runtimeLogPath string
 }
 
 // BaseConfig 为全局配置

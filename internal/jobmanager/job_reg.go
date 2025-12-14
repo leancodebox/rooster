@@ -155,17 +155,19 @@ func (itself *Job) jobGuard() {
 	if useDefault {
 		if defDir, err := getLogDir(); err == nil {
 			logDir = defDir
-			// 更新配置中的路径，以便 UI 展示正确位置（注意：这可能会在 flushConfig 时保存到文件）
-			itself.Options.OutputPath = logDir
 		}
 	}
 
 	// 确保最终路径存在
 	_ = os.MkdirAll(logDir, os.ModePerm)
 
+	// 计算完整日志路径并保存到运行时状态
+	fullLogPath := filepath.Join(logDir, itself.JobName+"_log.txt")
+	itself.runtimeLogPath = fullLogPath
+
 	// 创建 logger
 	lLogger := &lumberjack.Logger{
-		Filename:   filepath.Join(logDir, itself.JobName+"_log.txt"),
+		Filename:   fullLogPath,
 		MaxSize:    10, // megabytes
 		MaxBackups: 3,
 		MaxAge:     28,   // days
@@ -329,6 +331,10 @@ func getConfigPath() (string, error) {
 	}
 	jobConfigPath := path.Join(configDir, "jobConfig.json")
 	return jobConfigPath, nil
+}
+
+func GetLogDir() (string, error) {
+	return getLogDir()
 }
 
 func getLogDir() (string, error) {

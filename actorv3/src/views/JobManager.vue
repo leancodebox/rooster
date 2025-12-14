@@ -5,7 +5,6 @@ import {
   getHomePath,
   getJobList,
   getJobLog,
-  getJobLogList,
   removeTask,
   runInfo,
   runJob,
@@ -15,8 +14,6 @@ import {
   stopJob
 } from '../request/remote'
 
-const hasLogById = ref<Record<string, boolean>>({}) // 兼容旧用法
-const logMapById = ref<Record<string, any>>({})
 const data = ref<any[]>([])
 const resident = ref<any[]>([])
 const scheduled = ref<any[]>([])
@@ -25,8 +22,7 @@ const showLogModal = ref(false)
 const showDeleteModal = ref(false)
 const pendingDeleteUuid = ref('')
 const logContent = ref('')
-const logInfo = ref<any>({hasLog: false, logPath: '', size: 0, modTime: '', uuid: ''})
-const logOrigin = ref<'文件' | '内存' | ''>('')
+const logInfo = ref<any>({hasLog: false, realLogPath: '', size: 0, modTime: '', uuid: ''})
 const isStreaming = ref(false)
 const autoScroll = ref(true)
 let logTimer: any = 0
@@ -61,7 +57,7 @@ function parseStart(s: string) {
 function getInitData(type: number) {
   return {
     uuid: '', jobName: '',link:'', type, spec: '* * * * *', binPath: '', dir: '', run: false,
-    options: {maxFailures: 5, outputPath: defaultLogDir.value || '/tmp', outputType: 2}, edit: false, readonly: false
+    options: {maxFailures: 5, outputPath: defaultLogDir.value || '/tmp'}, edit: false, readonly: false
   }
 }
 
@@ -82,9 +78,8 @@ function edit(row: any) {
 }
 
 async function viewLog(row: any) {
-  const item = logMapById.value[row.uuid]
+  const item = row
   logInfo.value = item || {hasLog: false}
-  logOrigin.value = logInfo.value.hasLog ? (logInfo.value.logPath ? '文件' : '内存') : ''
   isStreaming.value = false
   clearInterval(logTimer)
   if (evt) {
@@ -126,7 +121,7 @@ function startStreaming() {
     evt.close();
     evt = null
   }
-  const useFile = !!(currentJob.value && currentJob.value.options && currentJob.value.options.outputType === 2 && currentJob.value.options.outputPath)
+  const useFile = !!(currentJob.value && currentJob.value.options && currentJob.value.options.outputPath)
   if (useFile) {
     evt = new EventSource(`/api/job-log-stream?jobId=${encodeURIComponent(currentJob.value.uuid)}`)
     evt.onmessage = (e) => {
@@ -168,14 +163,6 @@ function stopStreaming() {
 async function refresh() {
   const resp = await getJobList();
   data.value = resp.data.message
-  const logsResp = await getJobLogList();
-  const logList = logsResp.data.message as any[]
-  hasLogById.value = {};
-  logMapById.value = {};
-  for (const item of logList) {
-    hasLogById.value[item.uuid] = item.hasLog
-    logMapById.value[item.uuid] = item
-  }
   resident.value = data.value.filter((x) => x.type === 1)
   scheduled.value = data.value.filter((x) => x.type === 2)
 }
@@ -333,9 +320,9 @@ onUnmounted(() => {
                   <button class="btn btn-sm join-item" :disabled="row.run===true"
                           @click="onRemove(row.uuid)" title="删除" aria-label="删除"><i
                       class="fa-solid fa-trash text-sm"></i></button>
-                  <button class="btn btn-sm join-item" :disabled="!logMapById[row.uuid]?.hasLog" @click="viewLog(row)"
-                          :title="logMapById[row.uuid]?.hasLog ? (logMapById[row.uuid]?.logPath ? '日志(文件)' : '日志(内存)') : '日志(未开启)'"
-                          aria-label="查看日志"><i class="fa-regular fa-file-lines text-sm"></i></button>
+                  <button class="btn btn-sm join-item" :disabled="!row.hasLog" @click="viewLog(row)"
+                            :title="row.hasLog ? '查看日志' : '日志(未开启)'"
+                            aria-label="查看日志"><i class="fa-regular fa-file-lines text-sm"></i></button>
                 </div>
               </td>
             </tr>
@@ -374,8 +361,8 @@ onUnmounted(() => {
                     <button class="btn btn-sm join-item" :disabled="row.run===true"
                           @click="onRemove(row.uuid)" title="删除" aria-label="删除"><i
                       class="fa-solid fa-trash text-sm"></i></button>
-                    <button class="btn btn-sm join-item" :disabled="!logMapById[row.uuid]?.hasLog" @click="viewLog(row)"
-                            :title="logMapById[row.uuid]?.hasLog ? (logMapById[row.uuid]?.logPath ? '日志(文件)' : '日志(内存)') : '日志(未开启)'"
+                    <button class="btn btn-sm join-item" :disabled="!row.hasLog" @click="viewLog(row)"
+                            :title="row.hasLog ? '查看日志' : '日志(未开启)'"
                             aria-label="查看日志"><i class="fa-regular fa-file-lines text-sm"></i></button>
                   </div>
                 </div>
@@ -408,13 +395,8 @@ onUnmounted(() => {
               placeholder="例如：/bin/bash -lc 'echo hi'"/></div>
           <div class="form-control"><label class="floating-label"><span>RunPath</span></label><input
               class="input input-bordered input-sm" v-model="model.dir" :disabled="model.readonly"/></div>
-          <div class="form-control"><label class="floating-label"><span>日志方式</span></label><select
-              class="select select-bordered select-sm" v-model="model.options.outputType" :disabled="model.readonly">
-            <option :value="1">标准</option>
-            <option :value="2">文件</option>
-          </select></div>
-          <div class="form-control" v-if="model.options.outputType===2"><label class="floating-label"><span>LogDir</span></label><input
-              class="input input-bordered input-sm" v-model="model.options.outputPath" :disabled="model.readonly"/>
+          <div class="form-control"><label class="floating-label"><span>LogDir</span></label><input
+              class="input input-bordered input-sm" v-model="model.options.outputPath" :disabled="model.readonly" placeholder="留空使用默认路径"/>
           </div>
           <div class="form-control"><label class="floating-label"><span>MaxFailures</span></label><input
               type="number" class="input input-bordered input-sm" v-model="model.options.maxFailures"
@@ -432,7 +414,7 @@ onUnmounted(() => {
     <div v-if="showLogModal" class="modal modal-open">
       <div class="modal-box w-11/12 max-w-2xl">
         <h3 class="font-bold text-lg">日志查看</h3>
-        <div class="py-2">来源: {{ logOrigin || '-' }} | 路径: {{ logInfo.logPath || '-' }} | 大小: {{ logInfo.size }} |
+        <div class="py-2">路径: {{ logInfo.realLogPath || '-' }} | 大小: {{ logInfo.size }} |
           更新时间: {{ logInfo.modTime || '-' }}
         </div>
         <div class="flex items-center gap-2 mb-2">
@@ -450,7 +432,7 @@ onUnmounted(() => {
             logContent
           }}</pre>
         <div class="modal-action">
-          <button class="btn" :disabled="!logInfo.logPath" @click="downloadLog" title="下载" aria-label="下载"><i
+          <button class="btn" :disabled="!logInfo.realLogPath" @click="downloadLog" title="下载" aria-label="下载"><i
               class="fa-solid fa-download text-xl"></i></button>
           <button class="btn" @click="showLogModal=false; stopStreaming()" title="关闭" aria-label="关闭"><i
               class="fa-solid fa-xmark text-xl"></i></button>

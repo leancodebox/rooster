@@ -5,39 +5,10 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/leancodebox/rooster/internal/jobmanager"
 )
-
-func handleJobLogList(c *gin.Context) {
-	var out []gin.H
-	for _, j := range jobmanager.JobList() {
-		hasLog := false
-		lp := ""
-		size := int64(0)
-		mt := ""
-		if j.Options.OutputPath != "" {
-			lp = filepath.Join(j.Options.OutputPath, j.JobName+"_log.txt")
-			if st, err := os.Stat(lp); err == nil && !st.IsDir() {
-				hasLog = true
-				size = st.Size()
-				mt = st.ModTime().Format("2006-01-02 15:04:05")
-			}
-		}
-		out = append(out, gin.H{
-			"uuid":    j.UUID,
-			"jobName": j.JobName,
-			"hasLog":  hasLog,
-			"logPath": lp,
-			"size":    size,
-			"modTime": mt,
-		})
-	}
-	c.JSON(http.StatusOK, gin.H{"message": out})
-}
 
 func handleJobLog(c *gin.Context) {
 	jobId := c.Query("jobId")

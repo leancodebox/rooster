@@ -64,7 +64,6 @@ func ServeRun() *http.Server {
 	api.POST("/remove-task", handleRemoveTask)
 
 	// Log handlers
-	api.GET("/job-log-list", handleJobLogList)
 	api.GET("/job-log", handleJobLog)
 	api.GET("/job-log-download", handleJobLogDownload)
 	api.GET("/job-log-stream", handleJobLogStream)

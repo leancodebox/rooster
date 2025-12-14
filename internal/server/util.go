@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -44,15 +43,10 @@ func getJobStatusById(id string) (jobmanager.JobStatusShow, bool) {
 }
 
 func getJobLogPath(j jobmanager.JobStatusShow) (string, bool) {
-	if j.Options.OutputPath == "" {
-		return "", false
+	if j.RealLogPath != "" {
+		return j.RealLogPath, true
 	}
-	p := filepath.Join(j.Options.OutputPath, j.JobName+"_log.txt")
-	// safety: ensure p starts with OutputPath
-	if !strings.HasPrefix(p, j.Options.OutputPath) {
-		return "", false
-	}
-	return p, true
+	return "", false
 }
 
 func readTail(path string, lines, bytes, maxBytes int) ([]byte, error) {

@@ -3,6 +3,8 @@ package jobmanager
 import (
 	"errors"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -24,11 +26,17 @@ type JobStatusShow struct {
 	LastExit     time.Time     `json:"lastExit"`
 	LastExitCode int           `json:"lastExitCode"`
 	LastDuration time.Duration `json:"lastDuration"`
+
+	// Log info
+	HasLog      bool   `json:"hasLog"`
+	RealLogPath string `json:"realLogPath"`
+	LogSize     int64  `json:"size"`
+	LogModTime  string `json:"modTime"`
 }
 
 // 类型转化
 func job2jobStatus(job Job) JobStatusShow {
-	return JobStatusShow{
+	js := JobStatusShow{
 		UUID:         job.UUID,
 		JobName:      job.JobName,
 		Link:         job.Link,
@@ -44,6 +52,55 @@ func job2jobStatus(job Job) JobStatusShow {
 		LastExitCode: job.LastExitCode,
 		LastDuration: job.LastDuration,
 	}
+
+	// Populate log info
+	// 1. Use runtime path if available
+	if job.runtimeLogPath != "" {
+		js.RealLogPath = job.runtimeLogPath
+	}
+
+	// 2. If no runtime path, try to find existing log file
+	if js.RealLogPath == "" {
+		defaultDir, _ := getLogDir()
+
+		// Check user configured path
+		if job.Options.OutputPath != "" {
+			p := filepath.Join(job.Options.OutputPath, job.JobName+"_log.txt")
+			if st, err := os.Stat(p); err == nil && !st.IsDir() {
+				js.RealLogPath = p
+			}
+		}
+
+		// Check default path if not found yet
+		if js.RealLogPath == "" && defaultDir != "" {
+			p := filepath.Join(defaultDir, job.JobName+"_log.txt")
+			if st, err := os.Stat(p); err == nil && !st.IsDir() {
+				js.RealLogPath = p
+			}
+		}
+
+		// 3. If still not found, set to expected path
+		if js.RealLogPath == "" {
+			targetDir := job.Options.OutputPath
+			if targetDir == "" {
+				targetDir = defaultDir
+			}
+			if targetDir != "" {
+				js.RealLogPath = filepath.Join(targetDir, job.JobName+"_log.txt")
+			}
+		}
+	}
+
+	// Fill details if path is set
+	if js.RealLogPath != "" {
+		if st, err := os.Stat(js.RealLogPath); err == nil && !st.IsDir() {
+			js.HasLog = true
+			js.LogSize = st.Size()
+			js.LogModTime = st.ModTime().Format("2006-01-02 15:04:05")
+		}
+	}
+
+	return js
 }
 
 func JobList() []JobStatusShow {

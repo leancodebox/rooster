@@ -38,10 +38,6 @@ export function restartJob(jobId: any) {
     return instanceAxios.post('restart-job-resident-task', {jobId})
 }
 
-export function getJobLogList() {
-    return instanceAxios.get('job-log-list')
-}
-
 export function getJobLog(jobId: any, lines = 200, bytes = 0) {
     return instanceAxios.get('job-log', {params: {jobId, lines, bytes}})
 }
