@@ -34,6 +34,7 @@ func getMem(id string) *memBuf {
 func writeMem(id string, p []byte) {
 	b := getMem(id)
 	b.mu.Lock()
+	defer b.mu.Unlock()
 	if len(p) > 0 {
 		b.last = time.Now()
 		if len(b.buf)+len(p) > b.max {
@@ -46,7 +47,6 @@ func writeMem(id string, p []byte) {
 		}
 		b.buf = append(b.buf, p...)
 	}
-	b.mu.Unlock()
 }
 
 func GetMemLogStat(id string) (int64, time.Time, bool) {
