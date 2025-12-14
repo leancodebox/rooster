@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"math/rand"
 	"os"
@@ -16,7 +15,21 @@ import (
 	"time"
 
 	"github.com/robfig/cron/v3"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
+
+type dualWriter struct {
+	file *lumberjack.Logger
+}
+
+func (w *dualWriter) Write(p []byte) (n int, err error) {
+	_, _ = os.Stdout.Write(p)
+	return w.file.Write(p)
+}
+
+func (w *dualWriter) Close() error {
+	return w.file.Close()
+}
 
 var startTime = time.Now()
 
@@ -126,34 +139,48 @@ func (itself *Job) jobGuard() {
 		}
 		itself.cmd = nil
 	}()
-	var out, errw io.WriteCloser
-	if itself.Options.OutputType == OutputTypeFile && itself.Options.OutputPath != "" {
-		err := os.MkdirAll(itself.Options.OutputPath, os.ModePerm)
-		if err != nil {
-			slog.Info(err.Error())
+
+	// 确定日志路径
+	logDir := itself.Options.OutputPath
+	useDefault := false
+	if logDir != "" {
+		if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
+			slog.Error("用户设置的日志路径无效，使用默认路径", "path", logDir, "err", err)
+			useDefault = true
 		}
-		logFile, err := os.OpenFile(filepath.Join(itself.Options.OutputPath, itself.JobName+"_log.txt"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-		if err != nil {
-			slog.Info(err.Error())
-		}
-		if logFile != nil {
-			defer logFile.Close()
-		}
-		out, errw = buildWriters(itself.UUID, logFile)
 	} else {
-		out, errw = buildWriters(itself.UUID, nil)
+		useDefault = true
 	}
+
+	if useDefault {
+		if defDir, err := getLogDir(); err == nil {
+			logDir = defDir
+			// 更新配置中的路径，以便 UI 展示正确位置（注意：这可能会在 flushConfig 时保存到文件）
+			itself.Options.OutputPath = logDir
+		}
+	}
+
+	// 确保最终路径存在
+	_ = os.MkdirAll(logDir, os.ModePerm)
+
+	// 创建 logger
+	lLogger := &lumberjack.Logger{
+		Filename:   filepath.Join(logDir, itself.JobName+"_log.txt"),
+		MaxSize:    10, // megabytes
+		MaxBackups: 3,
+		MaxAge:     28,   // days
+		Compress:   true, // disabled by default
+	}
+
+	// 使用 dualWriter 同时输出到 stdout 和文件
+	writer := &dualWriter{file: lLogger}
+
 	defer func() {
-		if out != nil {
-			_ = out.Close()
-		}
-		if errw != nil {
-			_ = errw.Close()
-		}
+		_ = writer.Close()
 	}()
 
-	itself.cmd.Stdout = out
-	itself.cmd.Stderr = errw
+	itself.cmd.Stdout = writer
+	itself.cmd.Stderr = writer
 	counter := 1
 	consecutiveFailures := 0
 	for {
@@ -389,26 +416,42 @@ func execAction(job *Job) {
 	job.cmd = cmd
 	job.LastStart = time.Now()
 	job.status = Running
-	if job.Options.OutputType == OutputTypeFile && job.Options.OutputPath != "" {
-		err := os.MkdirAll(job.Options.OutputPath, os.ModePerm)
-		if err != nil {
-			slog.Info(err.Error())
+
+	// 确定日志路径
+	logDir := job.Options.OutputPath
+	useDefault := false
+	if logDir != "" {
+		if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
+			slog.Error("用户设置的日志路径无效，使用默认路径", "path", logDir, "err", err)
+			useDefault = true
 		}
-		logFile, err := os.OpenFile(filepath.Join(job.Options.OutputPath, job.JobName+"_log.txt"),
-			os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-		if err != nil {
-			slog.Info(err.Error())
-		} else {
-			defer logFile.Close()
-		}
-		out, errw := buildWriters(job.UUID, logFile)
-		cmd.Stdout = out
-		cmd.Stderr = errw
 	} else {
-		out, errw := buildWriters(job.UUID, nil)
-		cmd.Stdout = out
-		cmd.Stderr = errw
+		useDefault = true
 	}
+
+	if useDefault {
+		if defDir, err := getLogDir(); err == nil {
+			logDir = defDir
+			job.Options.OutputPath = logDir
+		}
+	}
+	_ = os.MkdirAll(logDir, os.ModePerm)
+
+	// 创建 logger
+	lLogger := &lumberjack.Logger{
+		Filename:   filepath.Join(logDir, job.JobName+"_log.txt"),
+		MaxSize:    10, // megabytes
+		MaxBackups: 3,
+		MaxAge:     28,   // days
+		Compress:   true, // disabled by default
+	}
+
+	writer := &dualWriter{file: lLogger}
+	defer func() { _ = writer.Close() }()
+
+	cmd.Stdout = writer
+	cmd.Stderr = writer
+
 	cmdErr := cmd.Run()
 	if cmdErr != nil {
 		slog.Info(cmdErr.Error())

@@ -69,15 +69,6 @@ func ServeRun() *http.Server {
 	api.GET("/job-log-download", handleJobLogDownload)
 	api.GET("/job-log-stream", handleJobLogStream)
 
-	go func() {
-		t := time.NewTicker(5 * time.Minute)
-		defer t.Stop()
-		for {
-			<-t.C
-			jobmanager.TrimMemLogs(1*time.Hour, 16<<20)
-		}
-	}()
-
 	var ln net.Listener
 	for i := 0; i < 1000; i++ {
 		tryPort := port + i

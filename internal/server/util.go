@@ -44,7 +44,7 @@ func getJobStatusById(id string) (jobmanager.JobStatusShow, bool) {
 }
 
 func getJobLogPath(j jobmanager.JobStatusShow) (string, bool) {
-	if j.Options.OutputType != 2 || j.Options.OutputPath == "" {
+	if j.Options.OutputPath == "" {
 		return "", false
 	}
 	p := filepath.Join(j.Options.OutputPath, j.JobName+"_log.txt")

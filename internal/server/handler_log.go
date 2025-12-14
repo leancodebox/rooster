@@ -19,19 +19,12 @@ func handleJobLogList(c *gin.Context) {
 		lp := ""
 		size := int64(0)
 		mt := ""
-		if j.Options.OutputType == 2 && j.Options.OutputPath != "" {
+		if j.Options.OutputPath != "" {
 			lp = filepath.Join(j.Options.OutputPath, j.JobName+"_log.txt")
 			if st, err := os.Stat(lp); err == nil && !st.IsDir() {
 				hasLog = true
 				size = st.Size()
 				mt = st.ModTime().Format("2006-01-02 15:04:05")
-			}
-		}
-		if !hasLog {
-			if sz, lt, ok := jobmanager.GetMemLogStat(j.UUID); ok {
-				hasLog = true
-				size = sz
-				mt = lt.Format("2006-01-02 15:04:05")
 			}
 		}
 		out = append(out, gin.H{
@@ -75,11 +68,7 @@ func handleJobLog(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"content": string(data)})
 		return
 	}
-	if data, ok := jobmanager.ReadMemTail(j.UUID, lines, bytes, maxBytes); ok {
-		c.JSON(http.StatusOK, gin.H{"content": string(data)})
-		return
-	}
-	c.JSON(http.StatusBadRequest, gin.H{"message": "未开启文件日志或日志为空"})
+	c.JSON(http.StatusBadRequest, gin.H{"message": "日志文件不存在或路径无效"})
 }
 
 func handleJobLogDownload(c *gin.Context) {
