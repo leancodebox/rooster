@@ -6,8 +6,8 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/leancodebox/rooster/jobmanager"
-	"github.com/leancodebox/rooster/jobmanagerserver"
+	"github.com/leancodebox/rooster/internal/jobmanager"
+	"github.com/leancodebox/rooster/internal/server"
 )
 
 func init() {
@@ -20,10 +20,10 @@ func main() {
 		slog.Error(err.Error())
 		return
 	}
-	jobmanagerserver.ServeRun()
+	server.ServeRun()
 	quit := make(chan os.Signal)
 	signal.Notify(quit, os.Interrupt)
 	<-quit
-	jobmanagerserver.ServeStop()
+	server.ServeStop()
 	slog.Info("bye~~👋👋")
 }

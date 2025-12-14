@@ -13,8 +13,8 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/theme"
 	"github.com/leancodebox/rooster/assets"
-	"github.com/leancodebox/rooster/jobmanager"
-	"github.com/leancodebox/rooster/jobmanagerserver"
+	"github.com/leancodebox/rooster/internal/jobmanager"
+	"github.com/leancodebox/rooster/internal/server"
 )
 
 func logLifecycle(a fyne.App) {
@@ -23,7 +23,7 @@ func logLifecycle(a fyne.App) {
 	})
 	a.Lifecycle().SetOnStopped(func() {
 		slog.Info("Lifecycle: Stop")
-		stop()
+		server.ServeStop()
 	})
 	a.Lifecycle().SetOnEnteredForeground(func() {
 		slog.Info("Lifecycle: Entered Foreground")
@@ -60,7 +60,7 @@ func main() {
 	}
 	go func() {
 		serverErr := startRoosterServer()
-		port := jobmanagerserver.GetPort()
+		port := server.GetPort()
 		url := fmt.Sprintf("http://localhost:%d/actor/", port)
 		// 桌面系统设置托盘
 		if desk, ok := roosterApp.(desktop.App); ok {
@@ -104,12 +104,8 @@ func startRoosterServer() error {
 	if err != nil {
 		return err
 	}
-	jobmanagerserver.ServeRun()
+	server.ServeRun()
 	return nil
-}
-
-func stop() {
-	jobmanagerserver.ServeStop()
 }
 
 func openURL(url string) error {

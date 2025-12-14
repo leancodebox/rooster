@@ -1,4 +1,4 @@
-package jobmanagerserver
+package server
 
 import (
 	"fmt"
