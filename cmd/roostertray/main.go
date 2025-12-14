@@ -88,7 +88,7 @@ func setupTray(a fyne.App) *fyne.Menu {
 
 	desk.SetSystemTrayIcon(theme.ListIcon())
 	// Initial menu state
-	menu := fyne.NewMenu(appName, fyne.NewMenuItem("启动中...", nil))
+	menu := fyne.NewMenu("启动中", fyne.NewMenuItem("启动中...", nil))
 	desk.SetSystemTrayMenu(menu)
 	return menu
 }
@@ -138,16 +138,8 @@ func runServer(a fyne.App, menu *fyne.Menu) {
 	newMenuItems = append(newMenuItems, fyne.NewMenuItem("退出", func() {
 		a.Quit()
 	}))
-
-	// Update the existing menu object
-	if menu != nil {
-		menu.Items = newMenuItems
-		menu.Refresh()
-	} else {
-		// Fallback if setupTray failed or wasn't called (though it is in main)
-		if desk, ok := a.(desktop.App); ok {
-			desk.SetSystemTrayMenu(fyne.NewMenu(appName, newMenuItems...))
-		}
+	if desk, ok := a.(desktop.App); ok {
+		desk.SetSystemTrayMenu(fyne.NewMenu(appName, newMenuItems...))
 	}
 }
 
