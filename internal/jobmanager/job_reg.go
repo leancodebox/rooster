@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"math/rand"
 	"os"
@@ -125,6 +126,7 @@ func (itself *Job) jobGuard() {
 		}
 		itself.cmd = nil
 	}()
+	var out, errw io.WriteCloser
 	if itself.Options.OutputType == OutputTypeFile && itself.Options.OutputPath != "" {
 		err := os.MkdirAll(itself.Options.OutputPath, os.ModePerm)
 		if err != nil {
@@ -134,15 +136,24 @@ func (itself *Job) jobGuard() {
 		if err != nil {
 			slog.Info(err.Error())
 		}
-		defer logFile.Close()
-		out, errw := buildWriters(itself.UUID, logFile)
-		itself.cmd.Stdout = out
-		itself.cmd.Stderr = errw
+		if logFile != nil {
+			defer logFile.Close()
+		}
+		out, errw = buildWriters(itself.UUID, logFile)
 	} else {
-		out, errw := buildWriters(itself.UUID, nil)
-		itself.cmd.Stdout = out
-		itself.cmd.Stderr = errw
+		out, errw = buildWriters(itself.UUID, nil)
 	}
+	defer func() {
+		if out != nil {
+			_ = out.Close()
+		}
+		if errw != nil {
+			_ = errw.Close()
+		}
+	}()
+
+	itself.cmd.Stdout = out
+	itself.cmd.Stderr = errw
 	counter := 1
 	consecutiveFailures := 0
 	for {

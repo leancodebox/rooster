@@ -8,7 +8,7 @@ import (
 
 func TestName(t *testing.T) {
 	old := time.Now().Add(-time.Second*86400*101 - time.Second*86400*3 - time.Second*864)
-	d := time.Now().Sub(old)
+	d := time.Since(old)
 
 	fmt.Println(formatDuration(d))
 
