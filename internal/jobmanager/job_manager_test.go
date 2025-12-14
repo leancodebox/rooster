@@ -119,13 +119,15 @@ func TestExecActionSetsStatusAndObservables(t *testing.T) {
 	defer func() { userHomeDirFn = oldHome }()
 	logDir, _ := getLogDir()
 	job := Job{
-		UUID:    generateUUID(),
-		JobName: "test-echo",
-		Type:    2,
-		Run:     true,
-		BinPath: "/bin/echo ok",
-		Dir:     tmpDir,
-		Options: RunOptions{OutputType: OutputTypeFile, OutputPath: logDir},
+		JobSpec: JobSpec{
+			UUID:    generateUUID(),
+			JobName: "test-echo",
+			Type:    2,
+			Run:     true,
+			BinPath: "/bin/echo ok",
+			Dir:     tmpDir,
+			Options: RunOptions{OutputType: OutputTypeFile, OutputPath: logDir},
+		},
 	}
 	job.ConfigInit()
 	execAction(&job)
@@ -168,7 +170,7 @@ func TestGetConfigPath_ErrorHomeDir(t *testing.T) {
 
 func TestScheduleV2_StartAndStop(t *testing.T) {
 	// ensure cron starts and can be stopped
-	job := &Job{UUID: generateUUID(), JobName: "cron-echo", Type: JobTypeScheduled, Run: true, BinPath: "/bin/echo hi"}
+	job := &Job{JobSpec: JobSpec{UUID: generateUUID(), JobName: "cron-echo", Type: JobTypeScheduled, Run: true, BinPath: "/bin/echo hi"}}
 	scheduleV2([]*Job{job})
 	// stop immediately
 	c.Stop()
@@ -180,10 +182,9 @@ func TestJobGuard_FailureBackoffWithoutSleep(t *testing.T) {
 	sleepFn = func(d time.Duration) {}
 	defer func() { sleepFn = old }()
 
-	j := &Job{UUID: generateUUID(), JobName: "fast-exit", Type: JobTypeResident, Run: true, BinPath: "/bin/echo x", Options: RunOptions{MaxFailures: 1, MinRunSeconds: int(maxExecutionTime.Seconds()) + 1}}
+	j := &Job{JobSpec: JobSpec{UUID: generateUUID(), JobName: "fast-exit", Type: JobTypeResident, Run: true, BinPath: "/bin/echo x", Options: RunOptions{MaxFailures: 1, MinRunSeconds: int(maxExecutionTime.Seconds()) + 1}}}
 	j.ConfigInit()
 	// make command exit quickly
-	j.cmd = buildCmd(j)
 	done := make(chan struct{})
 	go func() { j.jobGuard(); close(done) }()
 	// allow guard to run once and stop due to MaxFailures
@@ -192,13 +193,13 @@ func TestJobGuard_FailureBackoffWithoutSleep(t *testing.T) {
 
 func TestStopJobCancelsContext(t *testing.T) {
 	tmpDir := t.TempDir()
-	j := &Job{UUID: generateUUID(), JobName: "stop-sleep", Type: JobTypeResident, Run: true, BinPath: "sleep 2", Dir: tmpDir, Options: RunOptions{ShellPath: "/bin/bash"}}
+	j := &Job{JobSpec: JobSpec{UUID: generateUUID(), JobName: "stop-sleep", Type: JobTypeResident, Run: true, BinPath: "sleep 2", Dir: tmpDir, Options: RunOptions{ShellPath: "/bin/bash"}}}
 	j.ConfigInit()
 	if err := j.JobInit(); err != nil {
 		t.Fatalf("JobInit err: %v", err)
 	}
 	time.Sleep(100 * time.Millisecond)
-	j.StopJob(true)
+	j.StopJob()
 }
 
 func TestClosedAndStartClose_Last(t *testing.T) {

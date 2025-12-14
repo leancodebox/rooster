@@ -2,7 +2,6 @@ package jobmanager
 
 import (
 	"context"
-	"os/exec"
 	"sync"
 	"time"
 
@@ -52,8 +51,8 @@ const (
 	JobTypeScheduled JobType = 2
 )
 
-// Job 表示任务及其运行时状态
-type Job struct {
+// JobSpec defines the static configuration of a job
+type JobSpec struct {
 	UUID    string     `json:"uuid"`
 	JobName string     `json:"jobName"`
 	Link    string     `json:"link"`
@@ -63,10 +62,12 @@ type Job struct {
 	Dir     string     `json:"dir"`
 	Spec    string     `json:"spec"`
 	Options RunOptions `json:"options"` // 运行选项
+}
 
+// JobRuntime defines the dynamic runtime state of a job
+type JobRuntime struct {
 	status   RunStatus
 	confLock *sync.Mutex
-	cmd      *exec.Cmd
 	cancel   context.CancelFunc
 
 	entityId    cron.EntryID
@@ -78,6 +79,12 @@ type Job struct {
 	LastDuration time.Duration
 
 	runtimeLogPath string
+}
+
+// Job 表示任务及其运行时状态
+type Job struct {
+	JobSpec
+	JobRuntime
 }
 
 // BaseConfig 为全局配置

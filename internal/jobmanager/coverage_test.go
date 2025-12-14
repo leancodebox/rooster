@@ -11,7 +11,7 @@ import (
 
 func TestConfigInit_MergeDefaults(t *testing.T) {
 	jobConfigV2.Config.DefaultOptions = RunOptions{OutputType: OutputTypeStd, OutputPath: "", MaxFailures: 5, MinRunSeconds: 3, ShellPath: "/bin/bash"}
-	j := &Job{UUID: generateUUID(), JobName: "merge", Type: JobTypeResident}
+	j := &Job{JobSpec: JobSpec{UUID: generateUUID(), JobName: "merge", Type: JobTypeResident}}
 	j.ConfigInit()
 	if j.Options.MaxFailures != 5 || j.Options.MinRunSeconds != 3 || j.Options.ShellPath == "" {
 		t.Fatalf("defaults not merged: %+v", j.Options)
@@ -20,8 +20,8 @@ func TestConfigInit_MergeDefaults(t *testing.T) {
 
 func TestGetResidentScheduled(t *testing.T) {
 	jobConfigV2.TaskList = []*Job{
-		{UUID: generateUUID(), JobName: "r1", Type: JobTypeResident},
-		{UUID: generateUUID(), JobName: "s1", Type: JobTypeScheduled},
+		{JobSpec: JobSpec{UUID: generateUUID(), JobName: "r1", Type: JobTypeResident}},
+		{JobSpec: JobSpec{UUID: generateUUID(), JobName: "s1", Type: JobTypeScheduled}},
 	}
 	if len(jobConfigV2.GetResidentTask()) != 1 || len(jobConfigV2.GetScheduledTask()) != 1 {
 		t.Fatal("filter not working")
@@ -31,8 +31,8 @@ func TestGetResidentScheduled(t *testing.T) {
 func TestRegV2_WithJSON(t *testing.T) {
 	conf := JobConfig{
 		TaskList: []*Job{
-			{UUID: generateUUID(), JobName: "res", Type: JobTypeResident, Run: false, BinPath: "/bin/echo ok"},
-			{UUID: generateUUID(), JobName: "sch", Type: JobTypeScheduled, Run: true, Spec: "* * * * *", BinPath: "/bin/echo ok"},
+			{JobSpec: JobSpec{UUID: generateUUID(), JobName: "res", Type: JobTypeResident, Run: false, BinPath: "/bin/echo ok"}},
+			{JobSpec: JobSpec{UUID: generateUUID(), JobName: "sch", Type: JobTypeScheduled, Run: true, Spec: "* * * * *", BinPath: "/bin/echo ok"}},
 		},
 		Config: BaseConfig{DefaultOptions: RunOptions{OutputType: OutputTypeStd}},
 	}
@@ -42,7 +42,7 @@ func TestRegV2_WithJSON(t *testing.T) {
 }
 
 func TestScheduleV2_InvalidSpec(t *testing.T) {
-	job := &Job{UUID: generateUUID(), JobName: "bad-spec", Type: JobTypeScheduled, Run: true, Spec: "", BinPath: "/bin/echo ok"}
+	job := &Job{JobSpec: JobSpec{UUID: generateUUID(), JobName: "bad-spec", Type: JobTypeScheduled, Run: true, Spec: "", BinPath: "/bin/echo ok"}}
 	scheduleV2([]*Job{job})
 	c.Stop()
 }
@@ -52,25 +52,25 @@ func TestRegV2_InvalidJSON(t *testing.T) {
 }
 
 func TestStopAll(t *testing.T) {
-	j := &Job{UUID: generateUUID(), JobName: "res-stp", Type: JobTypeResident, Run: true, BinPath: "/bin/echo bye"}
+	j := &Job{JobSpec: JobSpec{UUID: generateUUID(), JobName: "res-stp", Type: JobTypeResident, Run: true, BinPath: "/bin/echo bye"}}
 	j.ConfigInit()
 	_ = j.JobInit()
 	StopAll()
 }
 
 func TestStopJob_TimeoutKillPath(t *testing.T) {
-	j := &Job{UUID: generateUUID(), JobName: "kill-path", Type: JobTypeResident, Run: true, BinPath: "trap '' INT; sleep 10", Options: RunOptions{ShellPath: "/bin/bash"}}
+	j := &Job{JobSpec: JobSpec{UUID: generateUUID(), JobName: "kill-path", Type: JobTypeResident, Run: true, BinPath: "trap '' INT; sleep 10", Options: RunOptions{ShellPath: "/bin/bash"}}}
 	j.ConfigInit()
 	if err := j.JobInit(); err != nil {
 		t.Fatalf("JobInit err: %v", err)
 	}
 	// ensure process started
 	time.Sleep(100 * time.Millisecond)
-	j.StopJob(true)
+	j.StopJob()
 }
 
 func TestRemoveTask_RunningError(t *testing.T) {
-	jobConfigV2.TaskList = []*Job{{UUID: "rid", JobName: "r", Type: JobTypeScheduled, Run: true}}
+	jobConfigV2.TaskList = []*Job{{JobSpec: JobSpec{UUID: "rid", JobName: "r", Type: JobTypeResident, Run: true}}}
 	err := RemoveTask(JobStatusShow{UUID: "rid"})
 	if err == nil {
 		t.Fatal("expected error for running task remove")
@@ -128,7 +128,7 @@ func TestGenerateDefaultJobConfigContent(t *testing.T) {
 }
 
 func TestJobRunOnce_DoubleCall(t *testing.T) {
-	j := &Job{UUID: generateUUID(), JobName: "once", Type: JobTypeScheduled, BinPath: "/bin/echo x"}
+	j := &Job{JobSpec: JobSpec{UUID: generateUUID(), JobName: "once", Type: JobTypeScheduled, BinPath: "/bin/echo x"}}
 	j.ConfigInit()
 	if err := j.RunOnce(); err != nil {
 		t.Fatalf("first runonce err: %v", err)
@@ -139,13 +139,13 @@ func TestJobRunOnce_DoubleCall(t *testing.T) {
 }
 
 func TestForceRunJob_Init(t *testing.T) {
-	j := &Job{UUID: generateUUID(), JobName: "force", Type: JobTypeResident, BinPath: "/bin/echo x"}
+	j := &Job{JobSpec: JobSpec{UUID: generateUUID(), JobName: "force", Type: JobTypeResident, BinPath: "/bin/echo x"}}
 	j.ConfigInit()
 	if err := j.ForceRunJob(); err != nil {
 		t.Fatalf("ForceRunJob err: %v", err)
 	}
 	time.Sleep(50 * time.Millisecond)
-	j.StopJob(true)
+	j.StopJob()
 }
 
 func TestGetHttpConfig(t *testing.T) {

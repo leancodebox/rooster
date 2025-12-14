@@ -9,27 +9,12 @@ import (
 	"math/rand"
 	"os"
 	"path"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
 
 	"github.com/robfig/cron/v3"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
-
-type dualWriter struct {
-	file *lumberjack.Logger
-}
-
-func (w *dualWriter) Write(p []byte) (n int, err error) {
-	_, _ = os.Stdout.Write(p)
-	return w.file.Write(p)
-}
-
-func (w *dualWriter) Close() error {
-	return w.file.Close()
-}
 
 var startTime = time.Now()
 
@@ -60,7 +45,9 @@ func RegV2(fileData []byte) {
 
 	for _, job := range jobConfigV2.GetResidentTask() {
 		job.ConfigInit()
-		job.JobInit()
+		if job.Run {
+			job.JobInit()
+		}
 
 		slog.Info(fmt.Sprintf("%v 加入常驻任务", job.UUID+job.JobName))
 	}
@@ -137,52 +124,10 @@ func (itself *Job) jobGuard() {
 		if err := recover(); err != nil {
 			slog.Error("jobGuard", "err", err)
 		}
-		itself.cmd = nil
 	}()
 
-	// 确定日志路径
-	logDir := itself.Options.OutputPath
-	useDefault := false
-	if logDir != "" {
-		if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
-			slog.Error("用户设置的日志路径无效，使用默认路径", "path", logDir, "err", err)
-			useDefault = true
-		}
-	} else {
-		useDefault = true
-	}
+	executor := NewJobExecutor()
 
-	if useDefault {
-		if defDir, err := getLogDir(); err == nil {
-			logDir = defDir
-		}
-	}
-
-	// 确保最终路径存在
-	_ = os.MkdirAll(logDir, os.ModePerm)
-
-	// 计算完整日志路径并保存到运行时状态
-	fullLogPath := filepath.Join(logDir, itself.JobName+"_log.txt")
-	itself.runtimeLogPath = fullLogPath
-
-	// 创建 logger
-	lLogger := &lumberjack.Logger{
-		Filename:   fullLogPath,
-		MaxSize:    10, // megabytes
-		MaxBackups: 3,
-		MaxAge:     28,   // days
-		Compress:   true, // disabled by default
-	}
-
-	// 使用 dualWriter 同时输出到 stdout 和文件
-	writer := &dualWriter{file: lLogger}
-
-	defer func() {
-		_ = writer.Close()
-	}()
-
-	itself.cmd.Stdout = writer
-	itself.cmd.Stderr = writer
 	counter := 1
 	consecutiveFailures := 0
 	for {
@@ -192,18 +137,21 @@ func (itself *Job) jobGuard() {
 		}
 		unitStartTime := time.Now()
 		counter += 1
-		cmdErr := itself.cmd.Start()
-		if cmdErr == nil {
-			itself.LastStart = unitStartTime
-			itself.status = Running
-			cmdErr = itself.cmd.Wait()
-			itself.LastExit = time.Now()
-			itself.LastDuration = time.Since(unitStartTime)
-			if itself.cmd.ProcessState != nil {
-				itself.LastExitCode = itself.cmd.ProcessState.ExitCode()
-			}
-			itself.status = Stop
-		}
+
+		// Prepare context for cancellation (Phase 3 transition)
+		// For now we use Background but support cancellation via itself.cancel
+		ctx, cancel := context.WithCancel(context.Background())
+		itself.cancel = cancel
+
+		// Execute the job
+		result := executor.Execute(ctx, itself)
+
+		// Cleanup context
+		itself.cancel = nil
+		cancel()
+
+		// Logic for retry/backoff based on result
+		cmdErr := result.Error
 
 		executionTime := time.Since(unitStartTime)
 		if cmdErr != nil {
@@ -258,45 +206,14 @@ func (itself *Job) ForceRunJob() error {
 	return itself.JobInit()
 }
 
-func (itself *Job) StopJob(updateStatus ...bool) {
+func (itself *Job) StopJob() {
 	itself.confLock.Lock()
 	defer itself.confLock.Unlock()
-	defer func() {
-		itself.cmd = nil
-	}()
+	itself.Run = false
 
-	if len(updateStatus) == 1 && updateStatus[0] {
-		itself.Run = false
-	}
 	if itself.cancel != nil {
 		itself.cancel()
 	}
-	if itself.cmd != nil && itself.cmd.Process != nil {
-		_ = itself.cmd.Process.Signal(os.Interrupt)
-		done := make(chan error, 1)
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		defer cancel()
-		// 等待进程退出
-		go func() {
-			_, err := itself.cmd.Process.Wait()
-			done <- err
-		}()
-		select {
-		case err := <-done:
-			if err != nil {
-				slog.Info(err.Error(), "jobName", itself.JobName)
-			} else {
-				slog.Info("waitEnd", "jobName", itself.JobName)
-			}
-			return
-		case <-ctx.Done():
-			slog.Info("KillProcessGroup", "jobName", itself.JobName)
-			if err := KillProcessGroup(itself.cmd); err != nil {
-				slog.Info(err.Error())
-			}
-		}
-	}
-	itself.status = Stop
 }
 
 var start time.Time
@@ -418,70 +335,30 @@ func (itself *Job) RunOnce() error {
 func execAction(job *Job) {
 	ctx, cancel := context.WithCancel(context.Background())
 	job.cancel = cancel
-	cmd := buildCmdWithCtx(ctx, job)
-	job.cmd = cmd
-	job.LastStart = time.Now()
-	job.status = Running
+	defer func() {
+		job.cancel = nil
+		cancel()
+	}()
 
-	// 确定日志路径
-	logDir := job.Options.OutputPath
-	useDefault := false
-	if logDir != "" {
-		if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
-			slog.Error("用户设置的日志路径无效，使用默认路径", "path", logDir, "err", err)
-			useDefault = true
-		}
-	} else {
-		useDefault = true
+	executor := NewJobExecutor()
+	result := executor.Execute(ctx, job)
+
+	if result.Error != nil {
+		slog.Info(result.Error.Error())
 	}
-
-	if useDefault {
-		if defDir, err := getLogDir(); err == nil {
-			logDir = defDir
-			job.Options.OutputPath = logDir
-		}
-	}
-	_ = os.MkdirAll(logDir, os.ModePerm)
-
-	// 创建 logger
-	lLogger := &lumberjack.Logger{
-		Filename:   filepath.Join(logDir, job.JobName+"_log.txt"),
-		MaxSize:    10, // megabytes
-		MaxBackups: 3,
-		MaxAge:     28,   // days
-		Compress:   true, // disabled by default
-	}
-
-	writer := &dualWriter{file: lLogger}
-	defer func() { _ = writer.Close() }()
-
-	cmd.Stdout = writer
-	cmd.Stderr = writer
-
-	cmdErr := cmd.Run()
-	if cmdErr != nil {
-		slog.Info(cmdErr.Error())
-	}
-	job.LastExit = time.Now()
-	job.LastDuration = job.LastExit.Sub(job.LastStart)
-	if cmd.ProcessState != nil {
-		job.LastExitCode = cmd.ProcessState.ExitCode()
-	}
-	job.status = Stop
-	job.cancel = nil
-	job.cmd = nil
 }
 
 // JobInit 初始化并执行常驻任务守护
 func (itself *Job) JobInit() error {
 	itself.confLock.Lock()
 	defer itself.confLock.Unlock()
-	if itself.cmd == nil {
-		itself.cmd = buildCmd(itself)
-		go itself.jobGuard()
-		return nil
+	// 如果已经在运行中，则不重复启动
+	if itself.status == Running {
+		return errors.New("程序运行中")
 	}
-	return errors.New("程序运行中")
+	itself.Run = true
+	go itself.jobGuard()
+	return nil
 }
 func generateDefaultJobConfig() JobConfig {
 	shellLoop := "while true; do echo 'rooster'; sleep 1; done"
@@ -492,24 +369,28 @@ func generateDefaultJobConfig() JobConfig {
 	}
 	logDir, _ := getLogDir()
 	resident := &Job{
-		UUID:    "",
-		JobName: "echo-loop",
-		Type:    JobTypeResident,
-		Run:     true,
-		BinPath: shellLoop,
-		Dir:     "",
-		Spec:    "",
-		Options: RunOptions{OutputType: OutputTypeFile, OutputPath: logDir, MaxFailures: 5},
+		JobSpec: JobSpec{
+			UUID:    "",
+			JobName: "echo-loop",
+			Type:    JobTypeResident,
+			Run:     true,
+			BinPath: shellLoop,
+			Dir:     "",
+			Spec:    "",
+			Options: RunOptions{OutputType: OutputTypeFile, OutputPath: logDir, MaxFailures: 5},
+		},
 	}
 	scheduled := &Job{
-		UUID:    "",
-		JobName: "tick",
-		Type:    JobTypeScheduled,
-		Run:     true,
-		BinPath: tick,
-		Dir:     "",
-		Spec:    "* * * * *",
-		Options: RunOptions{OutputType: OutputTypeFile, OutputPath: logDir, MaxFailures: 5},
+		JobSpec: JobSpec{
+			UUID:    "",
+			JobName: "tick",
+			Type:    JobTypeScheduled,
+			Run:     true,
+			BinPath: tick,
+			Dir:     "",
+			Spec:    "* * * * *",
+			Options: RunOptions{OutputType: OutputTypeFile, OutputPath: logDir, MaxFailures: 5},
+		},
 	}
 	return JobConfig{
 		TaskList: []*Job{resident, scheduled},

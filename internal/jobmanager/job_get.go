@@ -135,7 +135,7 @@ func JobStopResidentTask(jobId string) error {
 		return errors.New("jobId不存在")
 	}
 	defer flushConfig()
-	jh.StopJob(true)
+	jh.StopJob()
 	return nil
 }
 
@@ -226,15 +226,17 @@ func SaveTask(job JobStatusShow) error {
 	if job.UUID == "" {
 		job.UUID = generateUUID()
 		newJob := Job{
-			UUID:    job.UUID,
-			JobName: job.JobName,
-			Link:    job.Link,
-			Type:    JobType(job.Type),
-			Run:     job.Run,
-			BinPath: job.BinPath,
-			Dir:     job.Dir,
-			Spec:    job.Spec,
-			Options: job.Options,
+			JobSpec: JobSpec{
+				UUID:    job.UUID,
+				JobName: job.JobName,
+				Link:    job.Link,
+				Type:    JobType(job.Type),
+				Run:     job.Run,
+				BinPath: job.BinPath,
+				Dir:     job.Dir,
+				Spec:    job.Spec,
+				Options: job.Options,
+			},
 		}
 		newJob.ConfigInit()
 		jobConfigV2.TaskList = append(jobConfigV2.TaskList, &newJob)
