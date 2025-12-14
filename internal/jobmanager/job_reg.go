@@ -71,7 +71,7 @@ func RegV2(fileData []byte) {
 func scheduleV2(jobList []*Job) {
 	for _, job := range jobList {
 		job.ConfigInit()
-		if job.Run == false {
+		if !job.Run {
 			continue
 		}
 		entityId, err := c.AddFunc(job.Spec, func(job *Job) func() {
@@ -92,7 +92,7 @@ func scheduleV2(jobList []*Job) {
 func (itself *Job) ConfigInit() {
 	needFlush := false
 	defer func() {
-		if needFlush == true {
+		if needFlush {
 			flushConfig()
 		}
 	}()
@@ -265,7 +265,7 @@ func (itself *Job) StopJob(updateStatus ...bool) {
 		itself.cmd = nil
 	}()
 
-	if len(updateStatus) == 1 && updateStatus[0] == true {
+	if len(updateStatus) == 1 && updateStatus[0] {
 		itself.Run = false
 	}
 	if itself.cancel != nil {
@@ -306,7 +306,7 @@ func init() {
 }
 
 func GetRunTime() time.Duration {
-	return time.Now().Sub(start)
+	return time.Since(start)
 }
 
 func GetStartTime() time.Time {

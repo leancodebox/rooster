@@ -219,7 +219,7 @@ func RunTask(taskId string) error {
 func SaveTask(job JobStatusShow) error {
 	needFlush := false
 	defer func() {
-		if needFlush == true {
+		if needFlush {
 			flushConfig()
 		}
 	}()
@@ -242,7 +242,7 @@ func SaveTask(job JobStatusShow) error {
 	} else {
 		for _, jobItem := range jobConfigV2.TaskList {
 			if jobItem.UUID == job.UUID {
-				if jobItem.Run == true {
+				if jobItem.Run {
 					return errors.New("任务处于开启状态不允许修改,如需修改请先关闭")
 				}
 				if jobItem.Type != JobType(job.Type) {
@@ -266,14 +266,14 @@ func RemoveTask(job JobStatusShow) error {
 	needFlush := false
 	removed := false
 	defer func() {
-		if needFlush == true {
+		if needFlush {
 			flushConfig()
 		}
 	}()
 
 	for i, jobItem := range jobConfigV2.TaskList {
 		if jobItem.UUID == job.UUID {
-			if jobItem.Run == true {
+			if jobItem.Run {
 				return errors.New("任务处于开启状态不允许修改,如需修改请先关闭")
 			}
 			needFlush = true
