@@ -40,6 +40,14 @@ const defaultLogDir = ref('')
 const model = ref(getInitData(1))
 let timer: any = 0
 const runtimeDigits = ref({day: 0, hour: 0, minute: 0, second: 0})
+const toast = ref({ show: false, message: '' })
+
+function showToast(msg: string) {
+  toast.value = { show: true, message: msg }
+  setTimeout(() => {
+    toast.value.show = false
+  }, 600)
+}
 
 function calcDigits(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000))
@@ -208,6 +216,11 @@ async function refresh() {
   scheduled.value = data.value.filter((x) => x.type === 2)
 }
 
+async function onRefreshClick() {
+  await refresh()
+  showToast('刷新完毕')
+}
+
 async function onRemove(uuid: string) {
   pendingDeleteUuid.value = uuid
   showDeleteModal.value = true
@@ -292,7 +305,7 @@ onUnmounted(() => {
             class="fa-solid fa-plus text-xl"></i></button>
         <button class="btn btn-neutral btn-sm" @click="add(2)" title="新增定时任务" aria-label="新增定时任务"><i
             class="fa-solid fa-calendar-plus text-xl"></i></button>
-        <button class="btn btn-ghost btn-sm" @click="refresh" title="刷新列表" aria-label="刷新列表"><i
+        <button class="btn btn-ghost btn-sm" @click="onRefreshClick" title="刷新列表" aria-label="刷新列表"><i
             class="fa-solid fa-arrows-rotate text-xl"></i></button>
       </div>
       <div class="text-sm" v-if="appRunTime.start">
@@ -330,8 +343,8 @@ onUnmounted(() => {
             <thead>
             <tr>
               <th>JobName</th>
-              <th>跟随启动</th>
-              <th>运行状态</th>
+              <th class="text-center">跟随启动</th>
+              <th class="text-center">运行状态</th>
               <th>操作</th>
             </tr>
             </thead>
@@ -341,14 +354,16 @@ onUnmounted(() => {
                 <a v-if="row.link" :href="row.link"  class="btn btn-link font-mono no-underline px-0" target="_blank">{{row.jobName}}</a>
                 <span v-else>{{ row.jobName }}</span>
               </td>
-              <td class="whitespace-nowrap"><span class="text-sm"
-                                                  :class="row.run ? 'badge badge-success badge-sm whitespace-nowrap' : 'badge badge-sm whitespace-nowrap'">{{
-                  row.run ? '开启' : '关闭'
-                }}</span></td>
-              <td class="whitespace-nowrap"><span class="text-sm"
-                                                  :class="row.status === 1 ? 'badge badge-success badge-sm whitespace-nowrap' : 'badge badge-warning badge-sm whitespace-nowrap'">{{
-                  row.status === 1 ? '运行' : '暂停'
-                }}</span></td>
+              <td class="whitespace-nowrap">
+                <div class="flex items-center justify-center gap-2">
+                  <div :class="row.run ? 'status status-success status-lg' : 'status status-lg'" :title="row.run ? '开启' : '关闭'"></div>
+                </div>
+              </td>
+              <td class="whitespace-nowrap">
+                <div class="flex items-center justify-center gap-2">
+                  <div :class="row.status === 1 ? 'status status-success status-lg' : 'status status-warning status-lg'" :title="row.status === 1 ? '运行' : '暂停'"></div>
+                </div>
+              </td>
               <td>
                 <div class="join">
                   <button class="btn btn-sm join-item" @click="onStopResident(row.uuid)" title="停止" aria-label="停止">
@@ -378,17 +393,18 @@ onUnmounted(() => {
             <thead>
             <tr>
               <th>JobName</th>
-              <th>已开启</th>
+              <th class="text-center">已开启</th>
               <th>操作</th>
             </tr>
             </thead>
             <tbody>
             <tr v-for="row in scheduled" :key="row.uuid">
               <td class="truncate max-w-[14rem] sm:max-w-[18rem]">{{ row.jobName }}</td>
-              <td class="whitespace-nowrap"><span
-                  :class="row.run ? 'badge badge-success badge-sm whitespace-nowrap' : 'badge badge-sm whitespace-nowrap'">{{
-                  row.run ? '开启' : '关闭'
-                }}</span></td>
+              <td class="whitespace-nowrap">
+                <div class="flex items-center justify-center gap-2">
+                  <div :class="row.run ? 'status status-success status-lg' : 'status status-lg'" :title="row.run ? '开启' : '关闭'"></div>
+                </div>
+              </td>
               <td>
                 <div class="flex items-center gap-2">
                   <input type="checkbox" class="toggle toggle-sm " :checked="row.run"
@@ -488,6 +504,12 @@ onUnmounted(() => {
           <button class="btn btn-error" @click="confirmDelete">删除</button>
           <button class="btn" @click="showDeleteModal=false">取消</button>
         </div>
+      </div>
+    </div>
+
+    <div v-if="toast.show" class="toast toast-top toast-center z-50">
+      <div class="alert alert-success">
+        <span>{{ toast.message }}</span>
       </div>
     </div>
   </div>
