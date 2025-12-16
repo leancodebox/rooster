@@ -74,12 +74,12 @@ const (
 
 // JobRuntime 定义任务的动态运行时状态
 type JobRuntime struct {
-	status   RunStatus          `json:"-"`
-	confLock *sync.Mutex        `json:"-"`
-	cancel   context.CancelFunc `json:"-"`
+	status   RunStatus
+	confLock *sync.Mutex
+	cancel   context.CancelFunc
 
-	entityId    cron.EntryID `json:"-"`
-	runOnceLock *sync.Mutex  `json:"-"`
+	entityId    cron.EntryID
+	runOnceLock *sync.Mutex
 
 	Pid         int  `json:"-"`
 	RunningLoop bool `json:"-"`
@@ -89,7 +89,7 @@ type JobRuntime struct {
 	LastExitCode int           `json:"-"`
 	LastDuration time.Duration `json:"-"`
 
-	runtimeLogPath string `json:"-"`
+	runtimeLogPath string
 }
 
 // Job 表示任务及其运行时状态

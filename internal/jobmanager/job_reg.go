@@ -359,15 +359,14 @@ func RegByUserConfig() error {
 		_ = os.WriteFile(jobConfigPath, b, 0644)
 		RegV2(b)
 		return nil
-	} else {
-		var tmp JobConfig
-		if json.Unmarshal(fileData, &tmp) != nil {
-			def := generateDefaultJobConfig()
-			b, _ := json.MarshalIndent(def, "", "  ")
-			_ = os.WriteFile(jobConfigPath, b, 0644)
-			RegV2(b)
-			return nil
-		}
+	}
+	var tmp JobConfig
+	if json.Unmarshal(fileData, &tmp) != nil {
+		def := generateDefaultJobConfig()
+		b, _ := json.MarshalIndent(def, "", "  ")
+		_ = os.WriteFile(jobConfigPath, b, 0644)
+		RegV2(b)
+		return nil
 	}
 	RegV2(fileData)
 	return nil
