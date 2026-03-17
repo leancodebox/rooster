@@ -1,7 +1,4 @@
 @import "tailwindcss";
-@plugin "daisyui" {
-    themes: light --default;
-}
 
 @source "./index.html";
 @source "./src/**/*.{vue,js,ts,jsx,tsx}";
