@@ -184,27 +184,28 @@ export default function JobManager() {
   }, [])
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-6 font-mono bg-white min-h-screen">
-      <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+    <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-4 font-sans bg-white min-h-screen">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-2">
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Task Manager</h1>
         <div className="flex items-center gap-4">
           <div className="flex gap-2">
             <button 
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors" 
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1" 
               onClick={() => add(1)} 
               title="新增常驻任务"
             >
               <i className="fa-solid fa-plus text-sm"></i>
             </button>
             <button 
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors" 
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1" 
               onClick={() => add(2)} 
               title="新增定时任务"
             >
               <i className="fa-solid fa-calendar-plus text-sm"></i>
             </button>
             <button 
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-50 text-gray-600 hover:bg-gray-100 transition-colors" 
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-50 text-gray-600 hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1" 
               onClick={onRefreshClick} 
               title="刷新列表"
             >
@@ -212,128 +213,221 @@ export default function JobManager() {
             </button>
           </div>
           {appRunTime.start && (
-            <div className="hidden sm:block text-xs font-medium text-gray-500 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+            <div className="hidden sm:block text-xs font-medium text-gray-500 bg-gray-50 px-4 py-2 rounded-full border border-gray-100 shadow-sm">
               <div className="grid grid-flow-col gap-3">
                 <div className="flex items-baseline gap-1">
-                  <span className="font-mono text-gray-900">{runtimeDigits.day}</span>
-                  <span>天</span>
+                  <span className="font-mono text-gray-900 font-bold">{runtimeDigits.day}</span>
+                  <span className="text-gray-400">天</span>
                 </div>
                 <div className="flex items-baseline gap-1">
-                  <span className="font-mono text-gray-900">{String(runtimeDigits.hour).padStart(2, '0')}</span>
-                  <span>时</span>
+                  <span className="font-mono text-gray-900 font-bold">{String(runtimeDigits.hour).padStart(2, '0')}</span>
+                  <span className="text-gray-400">时</span>
                 </div>
                 <div className="flex items-baseline gap-1">
-                  <span className="font-mono text-gray-900">{String(runtimeDigits.minute).padStart(2, '0')}</span>
-                  <span>分</span>
+                  <span className="font-mono text-gray-900 font-bold">{String(runtimeDigits.minute).padStart(2, '0')}</span>
+                  <span className="text-gray-400">分</span>
                 </div>
                 <div className="flex items-baseline gap-1">
-                  <span className="font-mono text-gray-900 w-[18px] text-right">{String(runtimeDigits.second).padStart(2, '0')}</span>
-                  <span>秒</span>
+                  <span className="font-mono text-gray-900 font-bold w-[18px] text-right">{String(runtimeDigits.second).padStart(2, '0')}</span>
+                  <span className="text-gray-400">秒</span>
                 </div>
               </div>
             </div>
           )}
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <h2 className="text-lg font-semibold mb-2">常驻任务</h2>
-          <div className="overflow-x-auto border border-gray-200 rounded-lg">
-            <table className="w-full text-left border-collapse text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-3 font-semibold text-gray-700">JobName</th>
-                  <th className="px-4 py-3 font-semibold text-gray-700 text-center">跟随启动</th>
-                  <th className="px-4 py-3 font-semibold text-gray-700 text-center">运行状态</th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">操作</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {resident.map((row) => (
-                  <tr key={row.uuid} className="hover:bg-gray-50/50">
-                    <td className="px-4 py-3 truncate max-w-[14rem] sm:max-w-[18rem]">
-                      {row.link ? (
-                        <a href={row.link} className="text-blue-600 hover:text-blue-800 font-mono" target="_blank">{row.jobName}</a>
-                      ) : (
-                        <span>{row.jobName}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className={row.run ? 'w-3 h-3 rounded-full bg-green-500' : 'w-3 h-3 rounded-full bg-gray-300'} title={row.run ? '开启' : '关闭'}></div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className={row.status === 1 ? 'w-3 h-3 rounded-full bg-green-500' : 'w-3 h-3 rounded-full bg-yellow-500'} title={row.status === 1 ? '运行' : '暂停'}></div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex -space-x-px">
-                        <button className="px-2.5 py-1.5 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed first:rounded-l-md last:rounded-r-md transition-colors" onClick={() => onStopResident(row.uuid)} title="停止" aria-label="停止">
-                          <i className="fa-solid fa-stop text-sm"></i></button>
-                        <button className="px-2.5 py-1.5 text-emerald-600 bg-white border border-gray-300 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed first:rounded-l-md last:rounded-r-md transition-colors" disabled={row.status === 1}
-                          onClick={() => onStartResident(row.uuid)} title="启动" aria-label="启动"><i
-                            className="fa-solid fa-play text-sm"></i></button>
-                        <button className="px-2.5 py-1.5 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed first:rounded-l-md last:rounded-r-md transition-colors" onClick={() => edit(row)} title="编辑" aria-label="编辑"><i
-                          className="fa-solid fa-pen-to-square text-sm"></i></button>
-                        <button className="px-2.5 py-1.5 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed first:rounded-l-md last:rounded-r-md transition-colors" disabled={row.run === true}
-                          onClick={() => onRemove(row.uuid)} title="删除" aria-label="删除"><i
-                            className="fa-solid fa-trash text-sm"></i></button>
-                        <button className="px-2.5 py-1.5 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed first:rounded-l-md last:rounded-r-md transition-colors" disabled={!row.realLogPath} onClick={() => viewLog(row)}
-                          title={row.realLogPath ? '查看日志' : '日志(未开启)'}
-                          aria-label="查看日志"><i className="fa-regular fa-file-lines text-sm"></i></button>
-                      </div>
-                    </td>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Resident Tasks Card */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-full">
+          <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+              常驻任务
+            </h2>
+            <span className="text-xs font-medium text-gray-500 bg-white px-2 py-1 rounded border border-gray-200">{resident.length}</span>
+          </div>
+          
+          <div className="overflow-x-auto flex-1">
+            {resident.length > 0 ? (
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50/50 border-b border-gray-100">
+                    <th className="px-4 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider">Job Name</th>
+                    <th className="px-2 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider text-center w-16">Auto</th>
+                    <th className="px-2 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider text-center w-24">Status</th>
+                    <th className="px-4 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider text-right w-32">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {resident.map((row) => (
+                    <tr key={row.uuid} className="group hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex flex-col">
+                          {row.link ? (
+                            <a href={row.link} className="text-sm font-bold text-indigo-600 hover:text-indigo-800 font-mono tracking-tight truncate max-w-[8rem] sm:max-w-[12rem]" target="_blank" title={row.jobName}>{row.jobName}</a>
+                          ) : (
+                            <span className="text-sm font-bold text-gray-800 font-mono tracking-tight truncate max-w-[8rem] sm:max-w-[12rem]" title={row.jobName}>{row.jobName}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-2 py-3 whitespace-nowrap text-center">
+                         <div className={`inline-flex items-center justify-center w-6 h-6 rounded-full ${row.run ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`} title={row.run ? 'Auto Start: On' : 'Auto Start: Off'}>
+                           <i className={`fa-solid ${row.run ? 'fa-bolt' : 'fa-power-off'} text-xs`}></i>
+                         </div>
+                      </td>
+                      <td className="px-2 py-3 whitespace-nowrap text-center">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          row.status === 1 
+                            ? 'bg-green-50 text-green-700 ring-1 ring-green-600/20' 
+                            : 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-600/20'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${row.status === 1 ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
+                          {row.status === 1 ? 'Run' : 'Stop'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-right">
+                        <div className="flex items-center justify-end gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            onClick={() => onStopResident(row.uuid)} 
+                            title="Stop"
+                          >
+                            <i className="fa-solid fa-stop text-xs"></i>
+                          </button>
+                          <button 
+                            className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${row.status === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
+                            disabled={row.status === 1}
+                            onClick={() => onStartResident(row.uuid)} 
+                            title="Start"
+                          >
+                            <i className="fa-solid fa-play text-xs"></i>
+                          </button>
+                          <div className="w-px h-3 bg-gray-200 mx-1"></div>
+                          <button 
+                            className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                            onClick={() => edit(row)} 
+                            title="Edit"
+                          >
+                            <i className="fa-solid fa-pen text-xs"></i>
+                          </button>
+                          <button 
+                            className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${row.run === true ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-red-600 hover:bg-red-50'}`}
+                            disabled={row.run === true}
+                            onClick={() => onRemove(row.uuid)} 
+                            title="Delete"
+                          >
+                            <i className="fa-solid fa-trash text-xs"></i>
+                          </button>
+                          <button 
+                            className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${!row.realLogPath ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+                            disabled={!row.realLogPath} 
+                            onClick={() => viewLog(row)}
+                            title="View Log"
+                          >
+                            <i className="fa-regular fa-file-lines text-xs"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                <i className="fa-solid fa-box-open text-4xl mb-3 opacity-20"></i>
+                <p className="text-sm">No resident tasks found</p>
+                <button onClick={() => add(1)} className="mt-4 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline">Create one?</button>
+              </div>
+            )}
           </div>
         </div>
-        <div>
-          <h2 className="text-lg font-semibold mb-2">定时任务</h2>
-          <div className="overflow-x-auto border border-gray-200 rounded-lg">
-            <table className="w-full text-left border-collapse text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-3 font-semibold text-gray-700">JobName</th>
-                  <th className="px-4 py-3 font-semibold text-gray-700 text-center">已开启</th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">操作</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {scheduled.map((row) => (
-                  <tr key={row.uuid} className="hover:bg-gray-50/50">
-                    <td className="px-4 py-3 truncate max-w-[14rem] sm:max-w-[18rem]">{row.jobName}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className={row.run ? 'w-3 h-3 rounded-full bg-green-500' : 'w-3 h-3 rounded-full bg-gray-300'} title={row.run ? '开启' : '关闭'}></div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <input type="checkbox" className="w-9 h-5 bg-gray-200 rounded-full appearance-none relative checked:bg-blue-600 cursor-pointer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all checked:after:translate-x-4" checked={row.run}
-                          onChange={(e) => e.target.checked ? openScheduled(row.uuid) : closeScheduled(row.uuid)}
-                          title={row.run ? '关闭定时' : '开启定时'} aria-label={row.run ? '关闭定时' : '开启定时'} />
-                        <div className="flex -space-x-px">
-                          <button className="px-2.5 py-1.5 text-emerald-600 bg-white border border-gray-300 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed first:rounded-l-md last:rounded-r-md transition-colors" onClick={() => runTask(row.uuid).then(refresh)} title="运行一次"
-                            aria-label="运行一次"><i className="fa-solid fa-play text-sm"></i></button>
-                          <button className="px-2.5 py-1.5 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed first:rounded-l-md last:rounded-r-md transition-colors" onClick={() => edit(row)} title="编辑" aria-label="编辑"><i
-                            className="fa-solid fa-pen-to-square text-sm"></i></button>
-                          <button className="px-2.5 py-1.5 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed first:rounded-l-md last:rounded-r-md transition-colors" disabled={row.run === true}
-                            onClick={() => onRemove(row.uuid)} title="删除" aria-label="删除"><i
-                              className="fa-solid fa-trash text-sm"></i></button>
-                          <button className="px-2.5 py-1.5 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed first:rounded-l-md last:rounded-r-md transition-colors" disabled={!row.realLogPath} onClick={() => viewLog(row)}
-                            title={row.realLogPath ? '查看日志' : '日志(未开启)'}
-                            aria-label="查看日志"><i className="fa-regular fa-file-lines text-sm"></i></button>
-                        </div>
-                      </div>
-                    </td>
+
+        {/* Scheduled Tasks Card */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-full">
+          <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+             <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              定时任务
+            </h2>
+            <span className="text-xs font-medium text-gray-500 bg-white px-2 py-1 rounded border border-gray-200">{scheduled.length}</span>
+          </div>
+          
+          <div className="overflow-x-auto flex-1">
+             {scheduled.length > 0 ? (
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50/50 border-b border-gray-100">
+                    <th className="px-4 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider">Job Name</th>
+                    <th className="px-2 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider text-center w-16">Enabled</th>
+                    <th className="px-4 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider text-right w-32">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {scheduled.map((row) => (
+                    <tr key={row.uuid} className="group hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3 whitespace-nowrap">
+                         <span className="text-sm font-bold text-gray-800 font-mono tracking-tight truncate max-w-[8rem] sm:max-w-[12rem] block" title={row.jobName}>{row.jobName}</span>
+                      </td>
+                      <td className="px-2 py-3 whitespace-nowrap text-center">
+                        <div className="flex justify-center">
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              className="sr-only peer" 
+                              checked={row.run}
+                              onChange={(e) => e.target.checked ? openScheduled(row.uuid) : closeScheduled(row.uuid)}
+                            />
+                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                          </label>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-right">
+                         <div className="flex items-center justify-end gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                            onClick={() => runTask(row.uuid).then(refresh)} 
+                            title="Run Once"
+                          >
+                            <i className="fa-solid fa-play text-xs"></i>
+                          </button>
+                          <div className="w-px h-3 bg-gray-200 mx-1"></div>
+                          <button 
+                            className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                            onClick={() => edit(row)} 
+                            title="Edit"
+                          >
+                            <i className="fa-solid fa-pen text-xs"></i>
+                          </button>
+                          <button 
+                            className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${row.run === true ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-red-600 hover:bg-red-50'}`}
+                            disabled={row.run === true}
+                            onClick={() => onRemove(row.uuid)} 
+                            title="Delete"
+                          >
+                            <i className="fa-solid fa-trash text-xs"></i>
+                          </button>
+                          <button 
+                            className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${!row.realLogPath ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+                            disabled={!row.realLogPath} 
+                            onClick={() => viewLog(row)}
+                            title="View Log"
+                          >
+                            <i className="fa-regular fa-file-lines text-xs"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+             ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                <i className="fa-regular fa-calendar-xmark text-4xl mb-3 opacity-20"></i>
+                <p className="text-sm">No scheduled tasks</p>
+                <button onClick={() => add(2)} className="mt-4 text-xs font-medium text-emerald-600 hover:text-emerald-800 hover:underline">Schedule one?</button>
+              </div>
+             )}
           </div>
         </div>
       </div>
