@@ -125,7 +125,7 @@ export default function TaskEditModal({ show, modelValue, onUpdateModelValue, on
         </div>
         <div className="mt-6 flex justify-end gap-2">
           <button
-            className="px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-md hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
             onClick={onSave}
             disabled={localModel.readonly}
             title="保存"

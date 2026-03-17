@@ -272,7 +272,7 @@ export default function JobManager() {
                       <div className="flex -space-x-px">
                         <button className="px-2.5 py-1.5 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed first:rounded-l-md last:rounded-r-md transition-colors" onClick={() => onStopResident(row.uuid)} title="停止" aria-label="停止">
                           <i className="fa-solid fa-stop text-sm"></i></button>
-                        <button className="px-2.5 py-1.5 text-white bg-blue-600 border border-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:border-blue-400 disabled:cursor-not-allowed first:rounded-l-md last:rounded-r-md transition-colors" disabled={row.status === 1}
+                        <button className="px-2.5 py-1.5 text-emerald-600 bg-white border border-gray-300 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed first:rounded-l-md last:rounded-r-md transition-colors" disabled={row.status === 1}
                           onClick={() => onStartResident(row.uuid)} title="启动" aria-label="启动"><i
                             className="fa-solid fa-play text-sm"></i></button>
                         <button className="px-2.5 py-1.5 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed first:rounded-l-md last:rounded-r-md transition-colors" onClick={() => edit(row)} title="编辑" aria-label="编辑"><i
@@ -317,7 +317,7 @@ export default function JobManager() {
                           onChange={(e) => e.target.checked ? openScheduled(row.uuid) : closeScheduled(row.uuid)}
                           title={row.run ? '关闭定时' : '开启定时'} aria-label={row.run ? '关闭定时' : '开启定时'} />
                         <div className="flex -space-x-px">
-                          <button className="px-2.5 py-1.5 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed first:rounded-l-md last:rounded-r-md transition-colors" onClick={() => runTask(row.uuid).then(refresh)} title="运行一次"
+                          <button className="px-2.5 py-1.5 text-emerald-600 bg-white border border-gray-300 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed first:rounded-l-md last:rounded-r-md transition-colors" onClick={() => runTask(row.uuid).then(refresh)} title="运行一次"
                             aria-label="运行一次"><i className="fa-solid fa-play text-sm"></i></button>
                           <button className="px-2.5 py-1.5 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed first:rounded-l-md last:rounded-r-md transition-colors" onClick={() => edit(row)} title="编辑" aria-label="编辑"><i
                             className="fa-solid fa-pen-to-square text-sm"></i></button>

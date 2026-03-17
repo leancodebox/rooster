@@ -1,7 +1,7 @@
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
-  font-weight: 400;
+  font-weight: 500;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -13,6 +13,6 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #f9fafb; /* bg-gray-50 */
+  background-color: #ffffff;
   color: #111827; /* text-gray-900 */
 }
