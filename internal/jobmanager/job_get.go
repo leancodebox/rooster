@@ -34,6 +34,9 @@ type JobStatusShow struct {
 
 // ToStatusShow 转换为对外展示的状态结构
 func (job *Job) ToStatusShow() JobStatusShow {
+	job.confLock.Lock()
+	defer job.confLock.Unlock()
+
 	js := JobStatusShow{
 		UUID:         job.UUID,
 		JobName:      job.JobName,
@@ -127,6 +130,15 @@ func (m *Manager) StopAll() {
 		wg.Go(func(job *Job) func() {
 			return func() {
 				m.StopJob(job)
+
+				// 等待任务彻底退出，最多等待 5 秒
+				for i := 0; i < 50; i++ {
+					if !job.IsRunningLoop() {
+						break
+					}
+					time.Sleep(100 * time.Millisecond)
+				}
+
 				slog.Info(job.JobName + "退出")
 			}
 		}(item))

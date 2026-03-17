@@ -184,16 +184,16 @@ func (m *Manager) runResidentJobLoop(job *Job) {
 		// 准备取消上下文 (Phase 3 迁移)
 		// 目前使用 Background，但支持通过 job.cancel 进行取消
 		ctx, cancel := context.WithCancel(context.Background())
-		job.cancel = cancel
+		job.SetCancel(cancel)
 
 		// 执行任务
 		result := executor.Execute(ctx, job, func(pid int) {
-			job.Pid = pid
+			job.SetPid(pid)
 			m.flushConfig()
 		})
 
 		// 清理上下文
-		job.cancel = nil
+		job.SetCancel(nil)
 		cancel()
 
 		// 基于结果的重试/退避逻辑
@@ -417,9 +417,9 @@ func RunScheduledJob(job *Job) error {
 // execAction 执行一次性任务并记录观测值
 func (m *Manager) execAction(job *Job) {
 	ctx, cancel := context.WithCancel(context.Background())
-	job.cancel = cancel
+	job.SetCancel(cancel)
 	defer func() {
-		job.cancel = nil
+		job.SetCancel(nil)
 		cancel()
 	}()
 
@@ -434,19 +434,17 @@ func (m *Manager) execAction(job *Job) {
 // StartResidentJob 初始化并执行常驻任务守护
 func (m *Manager) StartResidentJob(job *Job) error {
 	job.confLock.Lock()
-	defer job.confLock.Unlock()
 	// 如果已经在运行中，则不重复启动
 	if job.RunningLoop {
+		job.confLock.Unlock()
 		return errors.New("程序运行中")
 	}
 	job.Run = true
 	job.RunningLoop = true
+	job.confLock.Unlock()
+
 	go func() {
-		defer func() {
-			job.confLock.Lock()
-			job.RunningLoop = false
-			job.confLock.Unlock()
-		}()
+		defer job.SetRunningLoop(false)
 		m.runResidentJobLoop(job)
 	}()
 	return nil

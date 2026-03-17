@@ -19,11 +19,16 @@ func NewLogManager() *LogManager {
 
 // dualWriter writes to both stdout and a file
 type dualWriter struct {
-	file *lumberjack.Logger
+	file    *lumberjack.Logger
+	jobName string
 }
 
 func (w *dualWriter) Write(p []byte) (n int, err error) {
-	_, _ = os.Stdout.Write(p)
+	// 在写入标准输出时增加任务名作为前缀，便于区分多个任务的日志
+	prefix := fmt.Sprintf("[%s] ", w.jobName)
+	os.Stdout.Write([]byte(prefix))
+	os.Stdout.Write(p)
+
 	return w.file.Write(p)
 }
 
@@ -83,7 +88,10 @@ func (m *LogManager) SetupLogger(jobName string, options RunOptions) (io.WriteCl
 	}
 
 	// Use dualWriter to output to both stdout and file
-	writer := &dualWriter{file: lLogger}
+	writer := &dualWriter{
+		file:    lLogger,
+		jobName: jobName,
+	}
 
 	return writer, fullLogPath, nil
 }

@@ -62,8 +62,7 @@ func (e *JobExecutor) Execute(ctx context.Context, job *Job, onStart func(int)) 
 	}
 
 	// 3. 更新状态（开始）
-	job.LastStart = result.StartTime
-	job.status = Running
+	job.SetStartInfo(result.StartTime)
 
 	// 4. 运行
 	if err := cmd.Start(); err != nil {
@@ -73,10 +72,7 @@ func (e *JobExecutor) Execute(ctx context.Context, job *Job, onStart func(int)) 
 		result.Error = err
 		result.ExitCode = -1 // 无法获取具体退出码
 
-		job.LastExit = result.EndTime
-		job.LastDuration = result.Duration
-		job.LastExitCode = result.ExitCode
-		job.status = Stop
+		job.SetExitInfo(result.EndTime, result.Duration, result.ExitCode)
 		return result
 	}
 
@@ -99,10 +95,7 @@ func (e *JobExecutor) Execute(ctx context.Context, job *Job, onStart func(int)) 
 		result.ExitCode = -1
 	}
 
-	job.LastExit = result.EndTime
-	job.LastDuration = result.Duration
-	job.LastExitCode = result.ExitCode
-	job.status = Stop
+	job.SetExitInfo(result.EndTime, result.Duration, result.ExitCode)
 
 	return result
 }

@@ -98,6 +98,54 @@ type Job struct {
 	JobRuntime
 }
 
+// --- Job 状态并发安全操作方法 ---
+
+// SetStartInfo 记录任务启动状态
+func (j *Job) SetStartInfo(startTime time.Time) {
+	j.confLock.Lock()
+	defer j.confLock.Unlock()
+	j.LastStart = startTime
+	j.status = Running
+}
+
+// SetExitInfo 记录任务退出状态
+func (j *Job) SetExitInfo(endTime time.Time, duration time.Duration, exitCode int) {
+	j.confLock.Lock()
+	defer j.confLock.Unlock()
+	j.LastExit = endTime
+	j.LastDuration = duration
+	j.LastExitCode = exitCode
+	j.status = Stop
+}
+
+// SetCancel 记录任务取消函数
+func (j *Job) SetCancel(cancel context.CancelFunc) {
+	j.confLock.Lock()
+	defer j.confLock.Unlock()
+	j.cancel = cancel
+}
+
+// SetPid 记录任务进程ID
+func (j *Job) SetPid(pid int) {
+	j.confLock.Lock()
+	defer j.confLock.Unlock()
+	j.Pid = pid
+}
+
+// IsRunningLoop 检查任务是否在主循环中运行
+func (j *Job) IsRunningLoop() bool {
+	j.confLock.Lock()
+	defer j.confLock.Unlock()
+	return j.RunningLoop
+}
+
+// SetRunningLoop 设置任务主循环运行状态
+func (j *Job) SetRunningLoop(running bool) {
+	j.confLock.Lock()
+	defer j.confLock.Unlock()
+	j.RunningLoop = running
+}
+
 // BaseConfig 为全局配置
 type BaseConfig struct {
 	Dashboard struct {
