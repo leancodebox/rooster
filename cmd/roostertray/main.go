@@ -12,7 +12,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/driver/desktop"
-	"fyne.io/fyne/v2/theme"
 	"github.com/leancodebox/rooster/assets"
 	"github.com/leancodebox/rooster/internal/jobmanager"
 	"github.com/leancodebox/rooster/internal/server"
@@ -87,7 +86,7 @@ func setupTray(a fyne.App) *fyne.Menu {
 		return nil
 	}
 
-	desk.SetSystemTrayIcon(theme.ListIcon())
+	desk.SetSystemTrayIcon(assets.GetTrayIcon())
 	// Initial menu state
 	menu := fyne.NewMenu("启动中", fyne.NewMenuItem("启动中...", nil))
 	desk.SetSystemTrayMenu(menu)
