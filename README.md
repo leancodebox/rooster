@@ -1,69 +1,79 @@
-# rooster 程序唤起/任务调度
+<div align="center">
+  <img src="./cmd/roostertray/icon_mac_256.png" alt="Rooster Logo" width="120" />
+  <h1>Rooster</h1>
+  <p><strong>一个兼备程序唤起和任务调度的现代化管理工具</strong></p>
+</div>
 
-一个兼备程序唤起和任务调度程序
+---
 
+**Rooster** 是一款跨平台的任务调度与程序守护工具。它不仅支持基于 cron 表达式的定时任务，还支持常驻任务的进程守护。更重要的是，它提供了一个基于 React + TailwindCSS 的现代化 Web 控制台 (Dashboard)，让你随时随地掌控你的任务状态。
 
-## rooster （包含 http-dashboard）
+## ✨ 特性
 
-自行编译，需要 `go1.21` `node`
-按照以下方式编译获取可执行文件`rooster`。
+- 🔄 **进程守护**：常驻任务异常退出自动重启。
+- ⏱️ **定时任务**：支持标准的 Crontab 表达式执行计划任务。
+- 🌐 **Web 面板**：内置现代化 Web Dashboard，可视化管理所有任务。
+- 🖥️ **跨平台**：支持 Windows / macOS / Linux，并提供原生的系统托盘 (System Tray) 管理。
+- 📝 **日志追踪**：支持 Web 终端实时流式输出任务执行日志。
+
+## 🚀 快速开始
+
+### 方式一：完整版 (Rooster 包含 Web Dashboard 和系统托盘)
+
+自行编译完整版，环境需要 `Go 1.21+` 和 `Node.js`。
+
 ```shell
-git clone  https://github.com/leancodebox/rooster.git 
+# 1. 克隆代码
+git clone https://github.com/leancodebox/rooster.git 
 cd rooster 
-cd actor 
-npm i
+
+# 2. 编译前端面板 (React)
+cd actorv3 
+npm install
 npm run build
 cd ..
-go install 
+
+# 3. 编译 Go 核心与托盘程序
+go build -o rooster ./cmd/roostertray
 ```
 
-## rooster-cli
+### 方式二：Rooster-CLI (纯命令行版)
 
-如果你有 `go1.21` 以上的环境，你可以尝试使用下面命令快速开始。
+如果你只需要纯净的后端调度功能，可以通过以下命令快速安装：
 
 ```shell
 go install github.com/leancodebox/rooster-cli@latest 
 ```
 
-执行 `rooster-cli` 后会判断当前目录是否存在 `jobConfig.json`，如果没有会提示是否生成默认配置，无论是否生成默认配置，本次都不会真正去执行程序唤起/任务调度。  
+执行 `rooster-cli` 后会判断当前目录是否存在 `jobConfig.json`。如果没有，会提示是否生成默认配置。生成配置后，修改完毕再次执行 `rooster-cli` 即可运行任务调度。
 
-可以在生成后修改完毕配置，再次执行 `rooster-cli` 运行任务调度。相关参数配置如下。
+## ⚙️ 配置文件说明 (`jobConfig.json`)
 
-## 参数说明
+| 键名 | 类型 | 说明 |
+| :--- | :---: | :--- |
+| `config` | `object` | 基础配置 |
+| `config.dashboard` | `object` | Web 面板配置 |
+| `config.dashboard.port` | `int` | 面板监听端口（小于 1 不开启，CLI 版无论是否配置都不会开启） |
+| `residentTask` | `array` | **常驻任务列表**（守护进程） |
+| `residentTask[].jobName` | `string` | 任务名称 |
+| `residentTask[].binPath` | `string` | 可执行文件路径，或环境变量中的命令 |
+| `residentTask[].params` | `array` | 执行参数列表 `["arg1", "arg2"]` |
+| `residentTask[].dir` | `string` | 任务的工作目录 |
+| `residentTask[].run` | `bool` | 是否启用该任务（可在 Web 面板中切换） |
+| `residentTask[].options` | `object` | 高级选项 |
+| `residentTask[].options.outputType` | `int` | 输出模式：`0` 标准输出，`1` 文件输出 |
+| `residentTask[].options.outputPath` | `string` | 日志输出路径 |
+| `scheduledTask` | `array` | **定时任务列表** (Cron) |
+| `scheduledTask[].jobName` | `string` | 任务名称 |
+| `scheduledTask[].binPath` | `string` | 可执行文件路径，或环境变量中的命令 |
+| `scheduledTask[].params` | `array` | 执行参数列表 `["arg1", "arg2"]` |
+| `scheduledTask[].dir` | `string` | 任务的工作目录 |
+| `scheduledTask[].spec` | `string` | Crontab 格式的调度周期，例如 `* * * * *` |
+| `scheduledTask[].run` | `bool` | 是否启用该任务 |
+| `scheduledTask[].options` | `object` | 同常驻任务选项配置 |
 
-
-|                 key                  |  value   |                    desc                    |
-| :----------------------------------: | :------: |:------------------------------------------:|
-|               `config`               | `object` |                    基础配置                    |
-|          `config.dashboard`          | `object` |                    面板配置                    |
-|       `config.dashboard.port`        |  `int`   | 端口，小于1，不开启（rooster-cli无论配置与否，都不会开启dashboardÏ） |
-|            `residentTask`            | `array`  |                    常驻任务                    |
-|       `residentTask.[]jobName`       | `string` |                    任务名                     |
-|       `residentTask.[]binPath`       | `string` |           可执行文件路径，或者环境变量中的可执行命令            |
-|       `residentTask.[]params`        | `array`  |                     参数                     |
-|      `residentTask.[]params.[]`      | `string` |                    参数列表                    |
-|         `residentTask.[]dir`         | `string` |                    执行目录                    |
-|         `residentTask.[]run`         |  `bool`  |    是否开启 ，true 开启 false 不开启，可以在web中开启关闭     |
-|       `residentTask.[]options`       | `object` |                     选项                     |
-| `residentTask.[]options.outputType`  |  `int`   |             输出模式 0 标准输出 1 文件输出             |
-| `residentTask.[]options.outputPath`  | `string` |                    输出路径                    |
-|           `scheduledTask`            | `array`  |                    任务名                     |
-|      `scheduledTask.[]jobName`       | `string` |           可执行文件路径，或者环境变量中的可执行命令            |
-|      `scheduledTask.[]binPath`       | `string` |                     参数                     |
-|       `scheduledTask.[]params`       | `array`  |                    参数列表                    |
-|     `scheduledTask.[]params.[]`      | `string` |                    执行目录                    |
-|        `scheduledTask.[]spec`        | `string` |        crontab 格式周期 例如 `* * * * * `        |
-|        `scheduledTask.[]run`         |  `bool`  |    是否开启 ，true 开启 false 不开启，可以在web中开启关闭     |
-|       `scheduledTask.[]options`       | `object` |                     选项                     |
-| `scheduledTask.[]options.outputType` |  `int`   |             输出模式 0 标准输出 1 文件输出             |
-| `scheduledTask.[]options.outputPath` | `string` |                    输出路径                    |
-
-
-# todo
-
-解决代码中配置/配置读取/配置使用/配置写入和程序运行之间的耦合点。
-
-程序守护进进程与外部的配置交互节藕。
-
-程序通知外部，外部发送信号给守护进程
+---
+<div align="center">
+  <sub>Built with ❤️ by Leancodebox</sub>
+</div>
 
