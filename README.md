@@ -21,8 +21,12 @@
 ### 方式一：完整版 (Rooster 包含 Web Dashboard 和系统托盘)
 
 自行编译完整版，环境需要 `Go 1.21+` 和 `Node.js`。
+因为桌面端使用了 Fyne 框架，需要先安装 Fyne 的打包工具：
 
 ```shell
+# 安装 Fyne 命令行工具
+go install fyne.io/fyne/v2/cmd/fyne@latest
+
 # 1. 克隆代码
 git clone https://github.com/leancodebox/rooster.git 
 cd rooster 
@@ -33,8 +37,9 @@ npm install
 npm run build
 cd ..
 
-# 3. 编译 Go 核心与托盘程序
-go build -o rooster ./cmd/roostertray
+# 3. 打包桌面端应用程序
+cd cmd/roostertray
+fyne package -os darwin -icon icon_mac_256.png # macOS 示例，其他系统请参考 fyne 文档
 ```
 
 ### 方式二：Rooster-CLI (纯命令行版)
