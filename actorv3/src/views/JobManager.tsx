@@ -96,8 +96,16 @@ export default function JobManager() {
     const resp = await getJobList()
     const msg = resp.data?.message || []
     setData(msg)
-    setResident(msg.filter((x: any) => x.type === 1))
-    setScheduled(msg.filter((x: any) => x.type === 2))
+    setResident(
+      msg
+        .filter((x: any) => x.type === 1)
+        .sort((a: any, b: any) => Number(b.status === 1) - Number(a.status === 1))
+    )
+    setScheduled(
+      msg
+        .filter((x: any) => x.type === 2)
+        .sort((a: any, b: any) => Number(b.run === true) - Number(a.run === true))
+    )
   }
 
   async function onRefreshClick() {
@@ -184,75 +192,79 @@ export default function JobManager() {
   }, [])
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-4 font-sans bg-white min-h-screen">
+    <div className="min-h-screen bg-slate-50 px-4 py-4 font-sans text-slate-800 md:px-6">
+      <div className="mx-auto max-w-[1600px] space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between pb-2">
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Task Manager</h1>
+      <header className="flex items-center justify-between border-b border-slate-200 px-1 py-3 md:px-2">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">任务控制台</h1>
+          <p className="mt-0.5 text-xs text-slate-400">Rooster Task Manager</p>
+        </div>
         <div className="flex items-center gap-4">
           <div className="flex gap-2">
-            <button 
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1" 
-              onClick={() => add(1)} 
+            <button
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-blue-600 transition hover:border-blue-200 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              onClick={() => add(1)}
               title="新增常驻任务"
             >
               <i className="fa-solid fa-plus text-sm"></i>
             </button>
-            <button 
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1" 
-              onClick={() => add(2)} 
+            <button
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-emerald-600 transition hover:border-emerald-200 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              onClick={() => add(2)}
               title="新增定时任务"
             >
               <i className="fa-solid fa-calendar-plus text-sm"></i>
             </button>
-            <button 
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-50 text-gray-600 hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1" 
-              onClick={onRefreshClick} 
+            <button
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              onClick={onRefreshClick}
               title="刷新列表"
             >
               <i className="fa-solid fa-arrows-rotate text-sm"></i>
             </button>
           </div>
           {appRunTime.start && (
-            <div className="hidden sm:block text-xs font-medium text-gray-500 bg-gray-50 px-4 py-2 rounded-full border border-gray-100 shadow-sm">
+            <div className="hidden rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-500 sm:block">
               <div className="grid grid-flow-col gap-3">
                 <div className="flex items-baseline gap-1">
-                  <span className="font-mono text-gray-900 font-bold">{runtimeDigits.day}</span>
-                  <span className="text-gray-400">天</span>
+                  <span className="font-mono font-semibold text-slate-800">{runtimeDigits.day}</span>
+                  <span className="text-slate-400">天</span>
                 </div>
                 <div className="flex items-baseline gap-1">
-                  <span className="font-mono text-gray-900 font-bold">{String(runtimeDigits.hour).padStart(2, '0')}</span>
-                  <span className="text-gray-400">时</span>
+                  <span className="font-mono font-semibold text-slate-800">{String(runtimeDigits.hour).padStart(2, '0')}</span>
+                  <span className="text-slate-400">时</span>
                 </div>
                 <div className="flex items-baseline gap-1">
-                  <span className="font-mono text-gray-900 font-bold">{String(runtimeDigits.minute).padStart(2, '0')}</span>
-                  <span className="text-gray-400">分</span>
+                  <span className="font-mono font-semibold text-slate-800">{String(runtimeDigits.minute).padStart(2, '0')}</span>
+                  <span className="text-slate-400">分</span>
                 </div>
                 <div className="flex items-baseline gap-1">
-                  <span className="font-mono text-gray-900 font-bold w-[18px] text-right">{String(runtimeDigits.second).padStart(2, '0')}</span>
-                  <span className="text-gray-400">秒</span>
+                  <span className="w-[18px] text-right font-mono font-semibold text-slate-800">{String(runtimeDigits.second).padStart(2, '0')}</span>
+                  <span className="text-slate-400">秒</span>
                 </div>
               </div>
             </div>
           )}
         </div>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.65fr)_minmax(360px,1fr)] gap-5 items-start">
         {/* Resident Tasks Card */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-full">
-          <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-              常驻任务
+        <section className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm md:h-[calc(100vh-8.5rem)] md:min-h-[480px]">
+          <div className="relative z-20 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
+            <h2 className="flex items-center gap-3 text-base font-semibold text-slate-900">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><i className="fa-solid fa-server text-xs"></i></span>
+              <span>常驻任务</span>
             </h2>
-            <span className="text-xs font-medium text-gray-500 bg-white px-2 py-1 rounded border border-gray-200">{resident.length}</span>
+            <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{resident.length}</span>
           </div>
-          
-          <div className="overflow-x-auto flex-1">
+
+          <div className="overflow-auto flex-1 min-h-0">
             {resident.length > 0 ? (
               <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50/50 border-b border-gray-100">
+                <thead className="sticky top-0 z-10 bg-slate-50 shadow-[0_1px_0_#e2e8f0]">
+                  <tr className="bg-slate-50">
                     <th className="px-4 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider">Job Name</th>
                     <th className="px-2 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider text-center w-16">Auto</th>
                     <th className="px-2 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider text-center w-24">Status</th>
@@ -261,8 +273,8 @@ export default function JobManager() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {resident.map((row) => (
-                    <tr key={row.uuid} className="group hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 whitespace-nowrap">
+                    <tr key={row.uuid} className={`group transition-colors ${row.status === 1 ? 'bg-emerald-50/20 hover:bg-emerald-50/50' : 'hover:bg-slate-50'}`}>
+                      <td className="px-4 py-2.5 whitespace-nowrap">
                         <div className="flex flex-col">
                           {row.link ? (
                             <a href={row.link} className="text-sm font-bold text-indigo-600 hover:text-indigo-800 font-mono tracking-tight truncate max-w-[8rem] sm:max-w-[12rem]" target="_blank" title={row.jobName}>{row.jobName}</a>
@@ -271,57 +283,57 @@ export default function JobManager() {
                           )}
                         </div>
                       </td>
-                      <td className="px-2 py-3 whitespace-nowrap text-center">
+                      <td className="px-2 py-2.5 whitespace-nowrap text-center">
                          <div className={`inline-flex items-center justify-center w-6 h-6 rounded-full ${row.run ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`} title={row.run ? 'Auto Start: On' : 'Auto Start: Off'}>
                            <i className={`fa-solid ${row.run ? 'fa-bolt' : 'fa-power-off'} text-xs`}></i>
                          </div>
                       </td>
-                      <td className="px-2 py-3 whitespace-nowrap text-center">
+                      <td className="px-2 py-2.5 whitespace-nowrap text-center">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          row.status === 1 
-                            ? 'bg-green-50 text-green-700 ring-1 ring-green-600/20' 
+                          row.status === 1
+                            ? 'bg-green-50 text-green-700 ring-1 ring-green-600/20'
                             : 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-600/20'
                         }`}>
                           <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${row.status === 1 ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
                           {row.status === 1 ? 'Run' : 'Stop'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-right">
+                      <td className="px-4 py-2.5 whitespace-nowrap text-right">
                         <div className="flex items-center justify-end gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
-                          <button 
+                          <button
                             className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                            onClick={() => onStopResident(row.uuid)} 
+                            onClick={() => onStopResident(row.uuid)}
                             title="Stop"
                           >
                             <i className="fa-solid fa-stop text-xs"></i>
                           </button>
-                          <button 
+                          <button
                             className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${row.status === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
                             disabled={row.status === 1}
-                            onClick={() => onStartResident(row.uuid)} 
+                            onClick={() => onStartResident(row.uuid)}
                             title="Start"
                           >
                             <i className="fa-solid fa-play text-xs"></i>
                           </button>
                           <div className="w-px h-3 bg-gray-200 mx-1"></div>
-                          <button 
+                          <button
                             className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
-                            onClick={() => edit(row)} 
+                            onClick={() => edit(row)}
                             title="Edit"
                           >
                             <i className="fa-solid fa-pen text-xs"></i>
                           </button>
-                          <button 
+                          <button
                             className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${row.run === true ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-red-600 hover:bg-red-50'}`}
                             disabled={row.run === true}
-                            onClick={() => onRemove(row.uuid)} 
+                            onClick={() => onRemove(row.uuid)}
                             title="Delete"
                           >
                             <i className="fa-solid fa-trash text-xs"></i>
                           </button>
-                          <button 
+                          <button
                             className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${!row.realLogPath ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
-                            disabled={!row.realLogPath} 
+                            disabled={!row.realLogPath}
                             onClick={() => viewLog(row)}
                             title="View Log"
                           >
@@ -341,23 +353,23 @@ export default function JobManager() {
               </div>
             )}
           </div>
-        </div>
+        </section>
 
         {/* Scheduled Tasks Card */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-full">
-          <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
-             <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              定时任务
+        <section className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm md:sticky md:top-4 md:h-[calc(100vh-8.5rem)] md:min-h-[480px]">
+          <div className="relative z-20 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
+             <h2 className="flex items-center gap-3 text-base font-semibold text-slate-900">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><i className="fa-solid fa-clock text-xs"></i></span>
+              <span>定时任务</span>
             </h2>
-            <span className="text-xs font-medium text-gray-500 bg-white px-2 py-1 rounded border border-gray-200">{scheduled.length}</span>
+            <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{scheduled.length}</span>
           </div>
-          
-          <div className="overflow-x-auto flex-1">
+
+          <div className="overflow-auto flex-1 min-h-0">
              {scheduled.length > 0 ? (
               <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50/50 border-b border-gray-100">
+                <thead className="sticky top-0 z-10 bg-slate-50 shadow-[0_1px_0_#e2e8f0]">
+                  <tr className="bg-slate-50">
                     <th className="px-4 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider">Job Name</th>
                     <th className="px-2 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider text-center w-16">Enabled</th>
                     <th className="px-4 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider text-right w-32">Actions</th>
@@ -365,16 +377,16 @@ export default function JobManager() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {scheduled.map((row) => (
-                    <tr key={row.uuid} className="group hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 whitespace-nowrap">
+                    <tr key={row.uuid} className={`group transition-colors ${row.run ? 'bg-emerald-50/20 hover:bg-emerald-50/50' : 'hover:bg-slate-50'}`}>
+                      <td className="px-4 py-2.5 whitespace-nowrap">
                          <span className="text-sm font-bold text-gray-800 font-mono tracking-tight truncate max-w-[8rem] sm:max-w-[12rem] block" title={row.jobName}>{row.jobName}</span>
                       </td>
-                      <td className="px-2 py-3 whitespace-nowrap text-center">
+                      <td className="px-2 py-2.5 whitespace-nowrap text-center">
                         <div className="flex justify-center">
                           <label className="relative inline-flex items-center cursor-pointer">
-                            <input 
-                              type="checkbox" 
-                              className="sr-only peer" 
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
                               checked={row.run}
                               onChange={(e) => e.target.checked ? openScheduled(row.uuid) : closeScheduled(row.uuid)}
                             />
@@ -382,34 +394,34 @@ export default function JobManager() {
                           </label>
                         </div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-right">
+                      <td className="px-4 py-2.5 whitespace-nowrap text-right">
                          <div className="flex items-center justify-end gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
-                          <button 
+                          <button
                             className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
-                            onClick={() => runTask(row.uuid).then(refresh)} 
+                            onClick={() => runTask(row.uuid).then(refresh)}
                             title="Run Once"
                           >
                             <i className="fa-solid fa-play text-xs"></i>
                           </button>
                           <div className="w-px h-3 bg-gray-200 mx-1"></div>
-                          <button 
+                          <button
                             className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
-                            onClick={() => edit(row)} 
+                            onClick={() => edit(row)}
                             title="Edit"
                           >
                             <i className="fa-solid fa-pen text-xs"></i>
                           </button>
-                          <button 
+                          <button
                             className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${row.run === true ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-red-600 hover:bg-red-50'}`}
                             disabled={row.run === true}
-                            onClick={() => onRemove(row.uuid)} 
+                            onClick={() => onRemove(row.uuid)}
                             title="Delete"
                           >
                             <i className="fa-solid fa-trash text-xs"></i>
                           </button>
-                          <button 
+                          <button
                             className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${!row.realLogPath ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
-                            disabled={!row.realLogPath} 
+                            disabled={!row.realLogPath}
                             onClick={() => viewLog(row)}
                             title="View Log"
                           >
@@ -429,7 +441,7 @@ export default function JobManager() {
               </div>
              )}
           </div>
-        </div>
+        </section>
       </div>
 
       <TaskEditModal
@@ -467,6 +479,7 @@ export default function JobManager() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }
