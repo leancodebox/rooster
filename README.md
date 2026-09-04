@@ -40,6 +40,13 @@ ROOSTER_DATA_DIR=/tmp/rooster-dev ROOSTER_LISTEN=127.0.0.1:19090 go run ./cmd/ro
 Use `go run ./cmd/rooster` for the native tray entry point. Platform packaging still uses
 Fyne's packaging toolchain.
 
+On macOS, build the tray application with:
+
+```sh
+make package-darwin
+open Rooster.app
+```
+
 ## Data
 
 By default, the database and logs live under the operating system's user configuration

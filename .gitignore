@@ -5,3 +5,4 @@ web/dist/
 *.db-shm
 *.db-wal
 coverage.out
+/Rooster.app/

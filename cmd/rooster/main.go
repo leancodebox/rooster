@@ -6,9 +6,11 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"sync"
+	"syscall"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -26,9 +28,9 @@ func main() {
 		slog.Error("resolve data directory", "error", err)
 		return
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	core, err := roosterapp.Start(ctx, dataDir, listenAddress(), httpapi.WebAssets())
+	coreCtx, cancelCore := context.WithCancel(context.Background())
+	defer cancelCore()
+	core, err := roosterapp.Start(coreCtx, dataDir, listenAddress(), httpapi.WebAssets())
 	if err != nil {
 		slog.Error("start rooster", "error", err)
 		return
@@ -39,7 +41,7 @@ func main() {
 	var closeOnce sync.Once
 	closeCore := func() {
 		closeOnce.Do(func() {
-			cancel()
+			cancelCore()
 			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer shutdownCancel()
 			if err := core.Close(shutdownCtx); err != nil {
@@ -48,11 +50,19 @@ func main() {
 		})
 	}
 	desktopApp.Lifecycle().SetOnStopped(closeCore)
+	signalCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+	go func() {
+		<-signalCtx.Done()
+		fyne.Do(desktopApp.Quit)
+	}()
 	if tray, ok := desktopApp.(desktop.App); ok {
 		tray.SetSystemTrayIcon(icon)
 		tray.SetSystemTrayMenu(fyne.NewMenu("Rooster", fyne.NewMenuItem("打开控制台", func() { openBrowser(core.URL()) }), fyne.NewMenuItem(fmt.Sprintf("监听 %s", core.URL()), nil), fyne.NewMenuItemSeparator(), fyne.NewMenuItem("退出", func() { desktopApp.Quit() })))
 	}
-	openBrowser(core.URL())
+	if os.Getenv("ROOSTER_NO_BROWSER") != "1" {
+		openBrowser(core.URL())
+	}
 	desktopApp.Run()
 	closeCore()
 }
