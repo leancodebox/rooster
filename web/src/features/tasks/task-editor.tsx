@@ -155,6 +155,21 @@ export function TaskEditor({
                 />
               </Field>
               <Field>
+                <FieldLabel htmlFor="task-link">配置链接</FieldLabel>
+                <Input
+                  id="task-link"
+                  type="url"
+                  value={draft.link}
+                  onChange={(event) =>
+                    setDraft({ ...draft, link: event.target.value })
+                  }
+                  placeholder="例如 http://127.0.0.1:3000"
+                />
+                <FieldDescription>
+                  填写后可在任务列表点击任务名打开对应页面。
+                </FieldDescription>
+              </Field>
+              <Field>
                 <FieldLabel>执行方式</FieldLabel>
                 <Select
                   items={modeItems}
@@ -384,6 +399,7 @@ function stripRuntime(task: Task): TaskDraft {
   return {
     name: task.name,
     description: task.description,
+    link: task.link,
     kind: task.kind,
     enabled: task.enabled,
     commandMode: task.commandMode,

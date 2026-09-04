@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -39,6 +40,7 @@ type Task struct {
 	ID            string            `json:"id"`
 	Name          string            `json:"name"`
 	Description   string            `json:"description"`
+	Link          string            `json:"link"`
 	Kind          TaskKind          `json:"kind"`
 	Enabled       bool              `json:"enabled"`
 	CommandMode   CommandMode       `json:"commandMode"`
@@ -59,6 +61,12 @@ type Task struct {
 func (t Task) Validate() error {
 	if strings.TrimSpace(t.Name) == "" {
 		return errors.New("task name is required")
+	}
+	if t.Link != "" {
+		link, err := url.ParseRequestURI(t.Link)
+		if err != nil || link.Host == "" || link.Scheme != "http" && link.Scheme != "https" {
+			return errors.New("task link must be an http or https URL")
+		}
 	}
 	if t.Kind != TaskKindResident && t.Kind != TaskKindScheduled {
 		return errors.New("task kind must be resident or scheduled")

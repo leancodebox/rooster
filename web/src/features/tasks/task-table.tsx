@@ -3,6 +3,7 @@ import {
   BracesIcon,
   CalendarClockIcon,
   EllipsisIcon,
+  ExternalLinkIcon,
   HistoryIcon,
   PencilIcon,
   PlayIcon,
@@ -138,7 +139,7 @@ export function TaskTable(props: TaskTableProps) {
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium">{task.name}</div>
+              <TaskName task={task} />
               <div className="truncate font-mono text-xs text-muted-foreground">
                 {task.command}
               </div>
@@ -255,9 +256,7 @@ export function TaskTable(props: TaskTableProps) {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">
-                        {task.name}
-                      </div>
+                      <TaskName task={task} />
                       <div className="max-w-72 truncate font-mono text-xs text-muted-foreground">
                         {task.command}
                       </div>
@@ -411,6 +410,25 @@ function IconButton({
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
+  )
+}
+
+function TaskName({ task }: { task: Task }) {
+  if (!task.link)
+    return <div className="truncate text-sm font-medium">{task.name}</div>
+
+  return (
+    <a
+      className="flex items-center gap-1 truncate text-sm font-medium text-primary hover:underline"
+      href={task.link}
+      target="_blank"
+      rel="noreferrer"
+      title={`打开 ${task.name} 的配置链接`}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <span className="truncate">{task.name}</span>
+      <ExternalLinkIcon className="size-3 shrink-0" />
+    </a>
   )
 }
 

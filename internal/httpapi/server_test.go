@@ -35,7 +35,7 @@ func TestTaskAPI(t *testing.T) {
 	api := New(eng, nil)
 	server := httptest.NewServer(api.http.Handler)
 	defer server.Close()
-	task := domain.Task{Name: "worker", Kind: domain.TaskKindResident, CommandMode: domain.CommandModeShell, Command: "echo ready", OverlapPolicy: domain.OverlapSkip, RestartPolicy: domain.RestartNever}
+	task := domain.Task{Name: "worker", Link: "https://example.com", Kind: domain.TaskKindResident, CommandMode: domain.CommandModeShell, Command: "echo ready", OverlapPolicy: domain.OverlapSkip, RestartPolicy: domain.RestartNever}
 	body, _ := json.Marshal(task)
 	response, err := http.Post(server.URL+"/api/tasks", "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -59,7 +59,7 @@ func TestTaskAPI(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Tasks) != 1 || result.Tasks[0].Name != "worker" {
+	if len(result.Tasks) != 1 || result.Tasks[0].Name != "worker" || result.Tasks[0].Link != task.Link {
 		t.Fatalf("unexpected tasks: %#v", result.Tasks)
 	}
 }

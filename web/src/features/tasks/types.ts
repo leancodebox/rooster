@@ -7,6 +7,7 @@ export interface Task {
   id: string
   name: string
   description: string
+  link: string
   kind: TaskKind
   enabled: boolean
   commandMode: CommandMode
@@ -55,6 +56,7 @@ export type TaskDraft = Omit<Task, "id" | "createdAt" | "updatedAt" | "runtime">
 export const emptyTask = (kind: TaskKind = "resident"): TaskDraft => ({
   name: "",
   description: "",
+  link: "",
   kind,
   enabled: false,
   commandMode: "shell",

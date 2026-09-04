@@ -84,6 +84,26 @@ INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (1, CURRENT_
 	if _, err := s.db.ExecContext(ctx, schema); err != nil {
 		return fmt.Errorf("migrate sqlite: %w", err)
 	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin sqlite migration: %w", err)
+	}
+	defer tx.Rollback()
+	var linkMigrationApplied bool
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=2)").Scan(&linkMigrationApplied); err != nil {
+		return fmt.Errorf("check sqlite migration 2: %w", err)
+	}
+	if !linkMigrationApplied {
+		if _, err := tx.ExecContext(ctx, "ALTER TABLE tasks ADD COLUMN link TEXT NOT NULL DEFAULT ''"); err != nil {
+			return fmt.Errorf("add task link: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "INSERT INTO schema_migrations(version, applied_at) VALUES (2, CURRENT_TIMESTAMP)"); err != nil {
+			return fmt.Errorf("record sqlite migration 2: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit sqlite migrations: %w", err)
+	}
 	return nil
 }
 
@@ -124,8 +144,8 @@ func (s *Store) CreateTask(ctx context.Context, t domain.Task) (domain.Task, err
 	args, _ := json.Marshal(t.Arguments)
 	env, _ := json.Marshal(t.Environment)
 	_, err := s.db.ExecContext(ctx, `INSERT INTO tasks
- (id,name,description,kind,enabled,command_mode,command,arguments_json,working_dir,shell,environment_json,schedule,overlap_policy,restart_policy,max_retries,min_run_seconds,created_at,updated_at)
- VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, t.ID, t.Name, t.Description, t.Kind, t.Enabled, t.CommandMode, t.Command, args, t.WorkingDir, t.Shell, env, t.Schedule, t.OverlapPolicy, t.RestartPolicy, t.MaxRetries, t.MinRunSeconds, formatTime(t.CreatedAt), formatTime(t.UpdatedAt))
+ (id,name,description,link,kind,enabled,command_mode,command,arguments_json,working_dir,shell,environment_json,schedule,overlap_policy,restart_policy,max_retries,min_run_seconds,created_at,updated_at)
+ VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, t.ID, t.Name, t.Description, t.Link, t.Kind, t.Enabled, t.CommandMode, t.Command, args, t.WorkingDir, t.Shell, env, t.Schedule, t.OverlapPolicy, t.RestartPolicy, t.MaxRetries, t.MinRunSeconds, formatTime(t.CreatedAt), formatTime(t.UpdatedAt))
 	if err != nil {
 		return domain.Task{}, fmt.Errorf("create task: %w", err)
 	}
@@ -139,7 +159,7 @@ func (s *Store) UpdateTask(ctx context.Context, t domain.Task) (domain.Task, err
 	t.UpdatedAt = time.Now().UTC()
 	args, _ := json.Marshal(t.Arguments)
 	env, _ := json.Marshal(t.Environment)
-	res, err := s.db.ExecContext(ctx, `UPDATE tasks SET name=?,description=?,enabled=?,command_mode=?,command=?,arguments_json=?,working_dir=?,shell=?,environment_json=?,schedule=?,overlap_policy=?,restart_policy=?,max_retries=?,min_run_seconds=?,updated_at=? WHERE id=? AND kind=?`, t.Name, t.Description, t.Enabled, t.CommandMode, t.Command, args, t.WorkingDir, t.Shell, env, t.Schedule, t.OverlapPolicy, t.RestartPolicy, t.MaxRetries, t.MinRunSeconds, formatTime(t.UpdatedAt), t.ID, t.Kind)
+	res, err := s.db.ExecContext(ctx, `UPDATE tasks SET name=?,description=?,link=?,enabled=?,command_mode=?,command=?,arguments_json=?,working_dir=?,shell=?,environment_json=?,schedule=?,overlap_policy=?,restart_policy=?,max_retries=?,min_run_seconds=?,updated_at=? WHERE id=? AND kind=?`, t.Name, t.Description, t.Link, t.Enabled, t.CommandMode, t.Command, args, t.WorkingDir, t.Shell, env, t.Schedule, t.OverlapPolicy, t.RestartPolicy, t.MaxRetries, t.MinRunSeconds, formatTime(t.UpdatedAt), t.ID, t.Kind)
 	if err != nil {
 		return domain.Task{}, fmt.Errorf("update task: %w", err)
 	}
@@ -233,7 +253,7 @@ func (s *Store) MarkInterruptedExecutions(ctx context.Context) error {
 	return nil
 }
 
-const taskSelect = `SELECT id,name,description,kind,enabled,command_mode,command,arguments_json,working_dir,shell,environment_json,schedule,overlap_policy,restart_policy,max_retries,min_run_seconds,created_at,updated_at FROM tasks`
+const taskSelect = `SELECT id,name,description,link,kind,enabled,command_mode,command,arguments_json,working_dir,shell,environment_json,schedule,overlap_policy,restart_policy,max_retries,min_run_seconds,created_at,updated_at FROM tasks`
 const executionSelect = `SELECT id,task_id,trigger,status,pid,started_at,finished_at,exit_code,error,log_path,created_at FROM executions`
 
 type scanner interface{ Scan(...any) error }
@@ -241,7 +261,7 @@ type scanner interface{ Scan(...any) error }
 func scanTask(row scanner) (domain.Task, error) {
 	var t domain.Task
 	var args, env, created, updated string
-	err := row.Scan(&t.ID, &t.Name, &t.Description, &t.Kind, &t.Enabled, &t.CommandMode, &t.Command, &args, &t.WorkingDir, &t.Shell, &env, &t.Schedule, &t.OverlapPolicy, &t.RestartPolicy, &t.MaxRetries, &t.MinRunSeconds, &created, &updated)
+	err := row.Scan(&t.ID, &t.Name, &t.Description, &t.Link, &t.Kind, &t.Enabled, &t.CommandMode, &t.Command, &args, &t.WorkingDir, &t.Shell, &env, &t.Schedule, &t.OverlapPolicy, &t.RestartPolicy, &t.MaxRetries, &t.MinRunSeconds, &created, &updated)
 	if err != nil {
 		return t, err
 	}

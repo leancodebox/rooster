@@ -15,7 +15,7 @@ func TestTaskAndExecutionLifecycle(t *testing.T) {
 	}
 	defer s.Close()
 	ctx := context.Background()
-	task := domain.Task{ID: "task-1", Name: "worker", Kind: domain.TaskKindResident, CommandMode: domain.CommandModeShell, Command: "echo ready", Environment: map[string]string{"MODE": "test"}, OverlapPolicy: domain.OverlapSkip, RestartPolicy: domain.RestartOnFailure, MaxRetries: 3, MinRunSeconds: 10}
+	task := domain.Task{ID: "task-1", Name: "worker", Link: "http://127.0.0.1:3000", Kind: domain.TaskKindResident, CommandMode: domain.CommandModeShell, Command: "echo ready", Environment: map[string]string{"MODE": "test"}, OverlapPolicy: domain.OverlapSkip, RestartPolicy: domain.RestartOnFailure, MaxRetries: 3, MinRunSeconds: 10}
 	task, err = s.CreateTask(ctx, task)
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +28,7 @@ func TestTaskAndExecutionLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !got.Enabled || got.Environment["MODE"] != "test" {
+	if !got.Enabled || got.Link != task.Link || got.Environment["MODE"] != "test" {
 		t.Fatalf("unexpected task: %#v", got)
 	}
 	execution := domain.Execution{ID: "exec-1", TaskID: task.ID, Trigger: domain.TriggerManual, Status: domain.ExecutionQueued, LogPath: "run.log"}

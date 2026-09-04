@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -496,6 +497,7 @@ func (e *Engine) reloadSchedules(ctx context.Context) error {
 }
 
 func normalizeTask(task *domain.Task) {
+	task.Link = strings.TrimSpace(task.Link)
 	if task.CommandMode == "" {
 		task.CommandMode = domain.CommandModeShell
 	}
