@@ -24,6 +24,7 @@ import { messageOf } from "./use-tasks"
 import type { Execution, Task } from "./types"
 
 export function ExecutionRail({ task }: { task: Task | null }) {
+  const taskId = task?.id
   const [executions, setExecutions] = useState<Execution[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [log, setLog] = useState("")
@@ -32,12 +33,12 @@ export function ExecutionRail({ task }: { task: Task | null }) {
     executions.find((execution) => execution.id === selectedId) ?? null
 
   useEffect(() => {
-    if (!task) return
+    if (!taskId) return
     let active = true
     async function load(quiet = false) {
       if (!quiet) setLoading(true)
       try {
-        const items = await api.executions(task!.id)
+        const items = await api.executions(taskId!)
         if (active) setExecutions(items)
       } catch (error) {
         if (!quiet) toast.error(messageOf(error))
@@ -51,7 +52,7 @@ export function ExecutionRail({ task }: { task: Task | null }) {
       active = false
       window.clearInterval(timer)
     }
-  }, [task])
+  }, [taskId])
 
   useEffect(() => {
     if (!selectedId) return
