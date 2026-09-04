@@ -72,3 +72,52 @@ func TestWebAssetsContainIndex(t *testing.T) {
 		t.Fatalf("status = %d", recorder.Code)
 	}
 }
+
+func TestEmptyTaskListIsJSONArray(t *testing.T) {
+	dir := t.TempDir()
+	st, err := storesqlite.Open(filepath.Join(dir, "rooster.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	eng := engine.New(st, runner.New(runner.NewEnvironmentProvider()), filepath.Join(dir, "logs"))
+	request := httptest.NewRequest(http.MethodGet, "/api/tasks", nil)
+	recorder := httptest.NewRecorder()
+	New(eng, nil).http.Handler.ServeHTTP(recorder, request)
+	var result struct {
+		Tasks json.RawMessage `json:"tasks"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if string(result.Tasks) != "[]" {
+		t.Fatalf("tasks JSON = %s, want []", result.Tasks)
+	}
+}
+
+func TestEmptyExecutionListIsJSONArray(t *testing.T) {
+	dir := t.TempDir()
+	st, err := storesqlite.Open(filepath.Join(dir, "rooster.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	eng := engine.New(st, runner.New(runner.NewEnvironmentProvider()), filepath.Join(dir, "logs"))
+	task, err := eng.CreateTask(context.Background(), domain.Task{Name: "idle", Kind: domain.TaskKindResident, CommandMode: domain.CommandModeShell, Command: "echo ready", OverlapPolicy: domain.OverlapSkip, RestartPolicy: domain.RestartNever})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/tasks/"+task.ID+"/executions", nil)
+	request.SetPathValue("id", task.ID)
+	recorder := httptest.NewRecorder()
+	New(eng, nil).http.Handler.ServeHTTP(recorder, request)
+	var result struct {
+		Executions json.RawMessage `json:"executions"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if string(result.Executions) != "[]" {
+		t.Fatalf("executions JSON = %s, want []", result.Executions)
+	}
+}

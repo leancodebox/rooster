@@ -93,7 +93,7 @@ func (s *Store) ListTasks(ctx context.Context) ([]domain.Task, error) {
 		return nil, fmt.Errorf("list tasks: %w", err)
 	}
 	defer rows.Close()
-	var tasks []domain.Task
+	tasks := make([]domain.Task, 0)
 	for rows.Next() {
 		t, err := scanTask(rows)
 		if err != nil {
@@ -214,7 +214,7 @@ func (s *Store) ListExecutions(ctx context.Context, taskID string, limit int) ([
 		return nil, fmt.Errorf("list executions: %w", err)
 	}
 	defer rows.Close()
-	var result []domain.Execution
+	result := make([]domain.Execution, 0)
 	for rows.Next() {
 		e, err := scanExecution(rows)
 		if err != nil {

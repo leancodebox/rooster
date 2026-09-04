@@ -28,7 +28,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   async tasks() {
-    return (await request<{ tasks: Task[] }>("/api/tasks")).tasks
+    const result = await request<{ tasks: Task[] | null }>("/api/tasks")
+    return Array.isArray(result.tasks) ? result.tasks : []
   },
   createTask(task: TaskDraft) {
     return request<Task>("/api/tasks", {
@@ -60,11 +61,10 @@ export const api = {
     })
   },
   async executions(taskId: string) {
-    return (
-      await request<{ executions: Execution[] }>(
-        `/api/tasks/${taskId}/executions?limit=50`
-      )
-    ).executions
+    const result = await request<{ executions: Execution[] | null }>(
+      `/api/tasks/${taskId}/executions?limit=50`
+    )
+    return Array.isArray(result.executions) ? result.executions : []
   },
   async log(executionId: string) {
     const response = await fetch(`/api/executions/${executionId}/logs`)

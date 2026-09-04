@@ -70,3 +70,26 @@ func TestMarkInterruptedExecutions(t *testing.T) {
 		t.Fatalf("unexpected execution: %#v", got)
 	}
 }
+
+func TestEmptyCollectionsAreNonNil(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "rooster.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	tasks, err := s.ListTasks(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tasks == nil || len(tasks) != 0 {
+		t.Fatalf("tasks = %#v, want empty non-nil slice", tasks)
+	}
+	executions, err := s.ListExecutions(ctx, "missing", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if executions == nil || len(executions) != 0 {
+		t.Fatalf("executions = %#v, want empty non-nil slice", executions)
+	}
+}
