@@ -112,7 +112,7 @@ export default function App() {
       </header>
 
       <section className="mx-auto max-w-[1680px] px-4 py-4 md:px-6">
-        <div className="grid grid-cols-3 border-y bg-muted/30">
+        <div className="grid grid-cols-3 divide-x overflow-hidden rounded-lg border bg-card">
           <Metric
             icon={<ActivityIcon />}
             label="运行中"
