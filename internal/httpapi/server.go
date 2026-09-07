@@ -73,11 +73,16 @@ func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, created)
 }
 func (s *Server) updateTask(w http.ResponseWriter, r *http.Request) {
-	var task domain.Task
-	if err := decodeJSON(r, &task); err != nil {
+	var request struct {
+		domain.Task
+		Runtime  json.RawMessage `json:"runtime"`
+		NextRuns json.RawMessage `json:"nextRuns"`
+	}
+	if err := decodeJSON(r, &request); err != nil {
 		writeError(w, err)
 		return
 	}
+	task := request.Task
 	task.ID = r.PathValue("id")
 	updated, err := s.engine.UpdateTask(r.Context(), task)
 	if err != nil {

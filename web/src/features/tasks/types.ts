@@ -23,6 +23,7 @@ export interface Task {
   minRunSeconds: number
   createdAt: string
   updatedAt: string
+  nextRuns?: string[]
   runtime: {
     state: RuntimeState
     executionId?: string
@@ -51,7 +52,10 @@ export interface Execution {
   createdAt: string
 }
 
-export type TaskDraft = Omit<Task, "id" | "createdAt" | "updatedAt" | "runtime">
+export type TaskDraft = Omit<
+  Task,
+  "id" | "createdAt" | "updatedAt" | "runtime" | "nextRuns"
+>
 
 export const emptyTask = (kind: TaskKind = "resident"): TaskDraft => ({
   name: "",

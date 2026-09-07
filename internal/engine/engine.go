@@ -27,7 +27,8 @@ type RuntimeState struct {
 
 type TaskView struct {
 	domain.Task
-	Runtime RuntimeState `json:"runtime"`
+	Runtime  RuntimeState `json:"runtime"`
+	NextRuns []time.Time  `json:"nextRuns,omitempty"`
 }
 
 type activeExecution struct {
@@ -125,6 +126,9 @@ func (e *Engine) ListTasks(ctx context.Context) ([]TaskView, error) {
 			state = RuntimeState{State: "idle"}
 		}
 		view := TaskView{Task: task, Runtime: state}
+		if task.Kind == domain.TaskKindScheduled {
+			view.NextRuns = nextRunTimes(task.Schedule, time.Now(), 5)
+		}
 		for id := range e.byTask[task.ID] {
 			if a := e.active[id]; a != nil {
 				view.Runtime = RuntimeState{State: "running", ExecutionID: id, PID: a.handle.PID}
@@ -134,6 +138,19 @@ func (e *Engine) ListTasks(ctx context.Context) ([]TaskView, error) {
 		views = append(views, view)
 	}
 	return views, nil
+}
+
+func nextRunTimes(schedule string, current time.Time, count int) []time.Time {
+	parsed, err := cron.ParseStandard(schedule)
+	if err != nil || count < 1 {
+		return nil
+	}
+	times := make([]time.Time, 0, count)
+	for range count {
+		current = parsed.Next(current)
+		times = append(times, current)
+	}
+	return times
 }
 
 func (e *Engine) CreateTask(ctx context.Context, task domain.Task) (domain.Task, error) {

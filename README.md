@@ -47,6 +47,12 @@ make package-darwin
 open Rooster.app
 ```
 
+To package it and replace the copy on the macOS desktop in one step:
+
+```sh
+./build-macos.sh
+```
+
 ## Data
 
 By default, the database and logs live under the operating system's user configuration

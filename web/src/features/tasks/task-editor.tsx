@@ -35,7 +35,7 @@ interface TaskEditorProps {
   initialKind: "resident" | "scheduled"
   onOpenChange: (open: boolean) => void
   onCreate: (task: TaskDraft) => Promise<unknown>
-  onUpdate: (task: Task) => Promise<unknown>
+  onUpdate: (id: string, task: TaskDraft) => Promise<unknown>
 }
 
 const kindItems = [
@@ -77,7 +77,7 @@ export function TaskEditor({
     setSaving(true)
     try {
       const value = { ...draft, environment: parseEnvironment(environment) }
-      if (task) await onUpdate({ ...task, ...value })
+      if (task) await onUpdate(task.id, value)
       else await onCreate(value)
       onOpenChange(false)
     } finally {

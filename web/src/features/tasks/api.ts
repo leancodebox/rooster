@@ -37,8 +37,8 @@ export const api = {
       body: JSON.stringify(task),
     })
   },
-  updateTask(task: Task) {
-    return request<Task>(`/api/tasks/${task.id}`, {
+  updateTask(id: string, task: TaskDraft) {
+    return request<Task>(`/api/tasks/${id}`, {
       method: "PUT",
       body: JSON.stringify(task),
     })

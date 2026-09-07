@@ -265,9 +265,7 @@ export function TaskTable(props: TaskTableProps) {
                 </TableCell>
                 <TableCell className="hidden lg:table-cell">
                   {task.kind === "scheduled" ? (
-                    <Badge variant="secondary" className="font-mono">
-                      {task.schedule}
-                    </Badge>
+                    <SchedulePreview task={task} />
                   ) : (
                     <span className="text-xs text-muted-foreground">
                       {restartLabel(task.restartPolicy)} · {task.maxRetries} 次
@@ -429,6 +427,68 @@ function TaskName({ task }: { task: Task }) {
       <span className="truncate">{task.name}</span>
       <ExternalLinkIcon className="size-3 shrink-0" />
     </a>
+  )
+}
+
+const runTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  weekday: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+})
+
+function SchedulePreview({ task }: { task: Task }) {
+  const nextRuns = task.nextRuns ?? []
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 text-left"
+            onClick={(event) => event.stopPropagation()}
+          />
+        }
+      >
+        <Badge variant="secondary" className="font-mono">
+          {task.schedule}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent
+        side="bottom"
+        align="start"
+        className="w-72 max-w-72 flex-col items-stretch gap-2 px-3 py-2.5"
+      >
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="font-medium">未来 5 次触发时间</span>
+          <span className="truncate text-[11px] opacity-70">{timezone}</span>
+        </div>
+        {!task.enabled ? (
+          <p className="opacity-70">任务当前已停用，启用后才会执行。</p>
+        ) : null}
+        {nextRuns.length > 0 ? (
+          <ol className="flex flex-col gap-1 font-mono tabular-nums">
+            {nextRuns.map((run, index) => (
+              <li key={run} className="flex items-center gap-2">
+                <span className="w-4 shrink-0 text-right opacity-50">
+                  {index + 1}
+                </span>
+                <time dateTime={run}>
+                  {runTimeFormatter.format(new Date(run))}
+                </time>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p>暂时无法计算后续触发时间。</p>
+        )}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 

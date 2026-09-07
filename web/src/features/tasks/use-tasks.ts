@@ -51,7 +51,8 @@ export function useTasks() {
     refresh,
     create: (draft: TaskDraft) =>
       act(() => api.createTask(draft), "任务已创建"),
-    update: (task: Task) => act(() => api.updateTask(task), "任务已保存"),
+    update: (id: string, draft: TaskDraft) =>
+      act(() => api.updateTask(id, draft), "任务已保存"),
     remove: (id: string) => act(() => api.deleteTask(id), "任务已删除"),
     toggle: (id: string, enabled: boolean) =>
       act(

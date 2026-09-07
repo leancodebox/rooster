@@ -35,7 +35,7 @@ func TestTaskAPI(t *testing.T) {
 	api := New(eng, nil)
 	server := httptest.NewServer(api.http.Handler)
 	defer server.Close()
-	task := domain.Task{Name: "worker", Link: "https://example.com", Kind: domain.TaskKindResident, CommandMode: domain.CommandModeShell, Command: "echo ready", OverlapPolicy: domain.OverlapSkip, RestartPolicy: domain.RestartNever}
+	task := domain.Task{Name: "worker", Link: "https://example.com", Kind: domain.TaskKindScheduled, CommandMode: domain.CommandModeShell, Command: "echo ready", Schedule: "0 * * * *", OverlapPolicy: domain.OverlapSkip, RestartPolicy: domain.RestartNever}
 	body, _ := json.Marshal(task)
 	response, err := http.Post(server.URL+"/api/tasks", "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -61,6 +61,31 @@ func TestTaskAPI(t *testing.T) {
 	}
 	if len(result.Tasks) != 1 || result.Tasks[0].Name != "worker" || result.Tasks[0].Link != task.Link {
 		t.Fatalf("unexpected tasks: %#v", result.Tasks)
+	}
+	if len(result.Tasks[0].NextRuns) != 5 {
+		t.Fatalf("next runs count = %d, want 5", len(result.Tasks[0].NextRuns))
+	}
+	result.Tasks[0].Description = "updated from task view"
+	body, _ = json.Marshal(result.Tasks[0])
+	request, err := http.NewRequest(http.MethodPut, server.URL+"/api/tasks/"+result.Tasks[0].ID, bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err = http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("update task view status = %d", response.StatusCode)
+	}
+	var updated domain.Task
+	if err := json.NewDecoder(response.Body).Decode(&updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Description != result.Tasks[0].Description {
+		t.Fatalf("updated description = %q", updated.Description)
 	}
 }
 
