@@ -9,7 +9,13 @@ import {
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   Empty,
   EmptyDescription,
@@ -104,28 +110,7 @@ export function ExecutionRail({ task }: { task: Task | null }) {
         </Badge>
       </div>
       <Separator />
-      {selected ? (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center justify-between gap-2 px-4 py-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setSelectedId(null)
-                setLog("")
-              }}
-            >
-              返回记录
-            </Button>
-            <ExecutionBadge status={selected.status} />
-          </div>
-          <ScrollArea className="min-h-0 flex-1">
-            <pre className="min-h-full bg-terminal p-4 font-mono text-xs leading-5 break-all whitespace-pre-wrap text-terminal-foreground">
-              {log || "暂无输出"}
-            </pre>
-          </ScrollArea>
-        </div>
-      ) : executions.length === 0 && !loading ? (
+      {executions.length === 0 && !loading ? (
         <Empty className="border-0">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -175,6 +160,41 @@ export function ExecutionRail({ task }: { task: Task | null }) {
           </div>
         </ScrollArea>
       )}
+      <Dialog
+        open={Boolean(selected)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedId(null)
+            setLog("")
+          }
+        }}
+      >
+        <DialogContent className="flex h-[min(80svh,720px)] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-xl p-0 sm:max-w-5xl">
+          {selected ? (
+            <>
+              <DialogHeader className="border-b px-5 py-4 pr-12">
+                <div className="flex items-center justify-between gap-3">
+                  <DialogTitle className="truncate">
+                    {formatDate(selected.startedAt || selected.createdAt)}
+                  </DialogTitle>
+                  <ExecutionBadge status={selected.status} />
+                </div>
+                <DialogDescription>
+                  {task.name} · {triggerLabel(selected.trigger)}
+                  {selected.exitCode !== undefined
+                    ? ` · exit ${selected.exitCode}`
+                    : ""}
+                </DialogDescription>
+              </DialogHeader>
+              <ScrollArea className="min-h-0 flex-1">
+                <pre className="min-h-full bg-terminal p-5 font-mono text-xs leading-5 break-all whitespace-pre-wrap text-terminal-foreground">
+                  {log || "暂无输出"}
+                </pre>
+              </ScrollArea>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

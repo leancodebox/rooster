@@ -136,7 +136,7 @@ export default function App() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-[1680px] grid-cols-1 gap-4 px-4 pb-5 md:px-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <section className="mx-auto grid max-w-[1680px] grid-cols-1 gap-4 px-4 pb-5 md:px-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="min-w-0 overflow-hidden rounded-lg border bg-card">
           <div className="flex flex-col gap-3 border-b p-3 sm:flex-row sm:items-center sm:justify-between">
             <Tabs
