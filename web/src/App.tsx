@@ -1,16 +1,24 @@
 import { lazy, Suspense, useDeferredValue, useMemo, useState } from "react"
 import {
-  ActivityIcon,
+  ArrowUpDownIcon,
   CalendarClockIcon,
   PlusIcon,
   RefreshCwIcon,
   SearchIcon,
-  ServerCogIcon,
   SparklesIcon,
 } from "lucide-react"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Tooltip,
@@ -22,7 +30,25 @@ import { TaskTable } from "@/features/tasks/task-table"
 import type { Task, TaskKind } from "@/features/tasks/types"
 import { useTasks } from "@/features/tasks/use-tasks"
 
-type Filter = "all" | TaskKind
+type Filter = "all" | "running" | TaskKind
+type Sort = "status" | "enabled" | "updated" | "name"
+
+const sortItems: Array<{ label: string; value: Sort }> = [
+  { label: "运行状态优先", value: "status" },
+  { label: "自动启用优先", value: "enabled" },
+  { label: "最近更新", value: "updated" },
+  { label: "名称", value: "name" },
+]
+
+const runtimeOrder: Record<Task["runtime"]["state"], number> = {
+  running: 0,
+  starting: 1,
+  stopping: 2,
+  backoff: 3,
+  failed: 4,
+  idle: 5,
+}
+
 const TaskEditor = lazy(() =>
   import("@/features/tasks/task-editor").then((module) => ({
     default: module.TaskEditor,
@@ -32,6 +58,7 @@ const TaskEditor = lazy(() =>
 export default function App() {
   const service = useTasks()
   const [filter, setFilter] = useState<Filter>("all")
+  const [sort, setSort] = useState<Sort>("status")
   const [query, setQuery] = useState("")
   const deferredQuery = useDeferredValue(query.trim().toLowerCase())
   const [selectedId, setSelectedId] = useState<string>()
@@ -39,27 +66,40 @@ export default function App() {
   const [editing, setEditing] = useState<Task | null>(null)
   const [initialKind, setInitialKind] = useState<TaskKind>("resident")
 
-  const selected =
-    service.tasks.find((task) => task.id === selectedId) ??
-    service.tasks[0] ??
-    null
   const visibleTasks = useMemo(
     () =>
-      service.tasks.filter((task) => {
-        if (filter !== "all" && task.kind !== filter) return false
-        if (!deferredQuery) return true
-        return `${task.name} ${task.description} ${task.command}`
-          .toLowerCase()
-          .includes(deferredQuery)
-      }),
-    [service.tasks, filter, deferredQuery]
+      service.tasks
+        .filter((task) => {
+          if (filter === "running" && task.runtime.state !== "running")
+            return false
+          if (filter !== "all" && filter !== "running" && task.kind !== filter)
+            return false
+          if (!deferredQuery) return true
+          return `${task.name} ${task.description} ${task.command}`
+            .toLowerCase()
+            .includes(deferredQuery)
+        })
+        .toSorted((left, right) => compareTasks(left, right, sort)),
+    [service.tasks, filter, deferredQuery, sort]
   )
-  const running = service.tasks.filter(
-    (task) => task.runtime.state === "running"
-  ).length
-  const enabledSchedules = service.tasks.filter(
-    (task) => task.kind === "scheduled" && task.enabled
-  ).length
+  const counts = useMemo(
+    () =>
+      service.tasks.reduce(
+        (totals, task) => {
+          totals.all += 1
+          if (task.runtime.state === "running") totals.running += 1
+          if (task.kind === "resident") totals.resident += 1
+          else totals.scheduled += 1
+          return totals
+        },
+        { all: 0, running: 0, resident: 0, scheduled: 0 }
+      ),
+    [service.tasks]
+  )
+  const selected =
+    visibleTasks.find((task) => task.id === selectedId) ??
+    visibleTasks[0] ??
+    null
 
   function create(kind: TaskKind) {
     setEditing(null)
@@ -111,46 +151,34 @@ export default function App() {
         </div>
       </header>
 
-      <section className="mx-auto max-w-[1680px] px-4 py-4 md:px-6">
-        <div className="grid grid-cols-3 divide-x overflow-hidden rounded-lg border bg-card">
-          <Metric
-            icon={<ActivityIcon />}
-            label="运行中"
-            value={running}
-            tone="status"
-          />
-          <Metric
-            icon={<ServerCogIcon />}
-            label="常驻任务"
-            value={
-              service.tasks.filter((task) => task.kind === "resident").length
-            }
-            tone="primary"
-          />
-          <Metric
-            icon={<CalendarClockIcon />}
-            label="调度启用"
-            value={enabledSchedules}
-            tone="schedule"
-          />
-        </div>
-      </section>
-
-      <section className="mx-auto grid max-w-[1680px] grid-cols-1 gap-4 px-4 pb-5 md:px-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <section className="mx-auto grid max-w-[1680px] grid-cols-1 gap-4 px-4 py-4 md:px-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="min-w-0 overflow-hidden rounded-lg border bg-card">
-          <div className="flex flex-col gap-3 border-b p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
             <Tabs
               value={filter}
               onValueChange={(value) => setFilter(value as Filter)}
             >
               <TabsList>
-                <TabsTrigger value="all">全部</TabsTrigger>
-                <TabsTrigger value="resident">常驻</TabsTrigger>
-                <TabsTrigger value="scheduled">定时</TabsTrigger>
+                <TaskTab value="all" label="全部" count={counts.all} />
+                <TaskTab
+                  value="running"
+                  label="运行中"
+                  count={counts.running}
+                />
+                <TaskTab
+                  value="resident"
+                  label="常驻"
+                  count={counts.resident}
+                />
+                <TaskTab
+                  value="scheduled"
+                  label="定时"
+                  count={counts.scheduled}
+                />
               </TabsList>
             </Tabs>
-            <div className="flex items-center gap-2">
-              <div className="relative min-w-0 flex-1 sm:w-64 sm:flex-none">
+            <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 lg:w-auto lg:flex-1">
+              <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto lg:w-56 lg:flex-none">
                 <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   className="pl-8"
@@ -160,6 +188,25 @@ export default function App() {
                   aria-label="搜索任务"
                 />
               </div>
+              <Select
+                items={sortItems}
+                value={sort}
+                onValueChange={(value) => value && setSort(value as Sort)}
+              >
+                <SelectTrigger className="w-40" aria-label="任务排序">
+                  <ArrowUpDownIcon />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  <SelectGroup>
+                    {sortItems.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
               <Button
                 variant="outline"
                 size="sm"
@@ -185,7 +232,7 @@ export default function App() {
             }
           />
         </div>
-        <aside className="min-h-[360px] overflow-hidden rounded-lg border bg-card xl:h-[calc(100svh-13.25rem)]">
+        <aside className="min-h-[360px] overflow-hidden rounded-lg border bg-card xl:h-[calc(100svh-6rem)]">
           <ExecutionRail key={selected?.id ?? "empty"} task={selected} />
         </aside>
       </section>
@@ -207,33 +254,35 @@ export default function App() {
   )
 }
 
-function Metric({
-  icon,
-  label,
+function TaskTab({
   value,
-  tone,
+  label,
+  count,
 }: {
-  icon: React.ReactNode
+  value: Filter
   label: string
-  value: number
-  tone: "primary" | "status" | "schedule"
+  count: number
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-3 px-3 py-3 sm:px-5">
-      <div
-        data-tone={tone}
-        className="metric-icon flex size-8 shrink-0 items-center justify-center rounded-md"
-      >
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <div className="text-lg leading-none font-semibold tabular-nums">
-          {value}
-        </div>
-        <div className="mt-1 truncate text-xs text-muted-foreground">
-          {label}
-        </div>
-      </div>
-    </div>
+    <TabsTrigger value={value}>
+      {label}
+      <Badge variant="secondary">{count}</Badge>
+    </TabsTrigger>
   )
+}
+
+function compareTasks(left: Task, right: Task, sort: Sort) {
+  if (sort === "status") {
+    const status =
+      runtimeOrder[left.runtime.state] - runtimeOrder[right.runtime.state]
+    if (status !== 0) return status
+  }
+  if (sort === "enabled") {
+    const enabled = Number(right.enabled) - Number(left.enabled)
+    if (enabled !== 0) return enabled
+  }
+  if (sort === "updated") {
+    return Date.parse(right.updatedAt) - Date.parse(left.updatedAt)
+  }
+  return left.name.localeCompare(right.name, "zh-CN")
 }

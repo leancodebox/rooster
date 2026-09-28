@@ -147,9 +147,3 @@
   --color-terminal: var(--terminal);
   --color-terminal-foreground: var(--terminal-foreground);
 }
-
-@layer components {
-  .metric-icon[data-tone="primary"] { @apply bg-primary/10 text-primary; }
-  .metric-icon[data-tone="status"] { @apply bg-status/10 text-status; }
-  .metric-icon[data-tone="schedule"] { @apply bg-schedule/10 text-schedule; }
-}
