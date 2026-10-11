@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 import type { Task, TaskDraft } from "./types"
-import { emptyTask } from "./types"
+import { emptyTask, isTaskLocked } from "./types"
 
 interface TaskEditorProps {
   open: boolean
@@ -65,15 +65,23 @@ export function TaskEditor({
   onUpdate,
 }: TaskEditorProps) {
   const initial = task ? stripRuntime(task) : emptyTask(initialKind)
-  const [draft, setDraft] = useState<TaskDraft>(initial)
-  const [environment, setEnvironment] = useState(() =>
+  const [editableDraft, setDraft] = useState<TaskDraft>(initial)
+  const [editableEnvironment, setEnvironment] = useState(() =>
     formatEnvironment(initial.environment)
   )
   const [saving, setSaving] = useState(false)
+  const [initiallyReadOnly] = useState(() =>
+    Boolean(task && isTaskLocked(task))
+  )
+  const readOnly = initiallyReadOnly || Boolean(task && isTaskLocked(task))
+  const draft = readOnly && task ? stripRuntime(task) : editableDraft
+  const environment = readOnly
+    ? formatEnvironment(draft.environment)
+    : editableEnvironment
 
   async function submit(event: FormEvent) {
     event.preventDefault()
-    if (!draft.name.trim() || !draft.command.trim()) return
+    if (readOnly || !draft.name.trim() || !draft.command.trim()) return
     setSaving(true)
     try {
       const value = { ...draft, environment: parseEnvironment(environment) }
@@ -92,7 +100,9 @@ export function TaskEditor({
           <SheetHeader>
             <SheetTitle>{task ? "编辑任务" : "创建任务"}</SheetTitle>
             <SheetDescription>
-              配置执行方式和自动运行策略。保存后可随时启停。
+              {readOnly
+                ? "任务已启用或正在运行，当前配置只读。"
+                : "配置执行方式和自动运行策略。保存后可随时启停。"}
             </SheetDescription>
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
@@ -101,6 +111,7 @@ export function TaskEditor({
                 <Field>
                   <FieldLabel htmlFor="task-name">名称</FieldLabel>
                   <Input
+                    readOnly={readOnly}
                     id="task-name"
                     required
                     value={draft.name}
@@ -146,6 +157,7 @@ export function TaskEditor({
               <Field>
                 <FieldLabel htmlFor="task-description">说明</FieldLabel>
                 <Input
+                  readOnly={readOnly}
                   id="task-description"
                   value={draft.description}
                   onChange={(event) =>
@@ -157,6 +169,7 @@ export function TaskEditor({
               <Field>
                 <FieldLabel htmlFor="task-link">配置链接</FieldLabel>
                 <Input
+                  readOnly={readOnly}
                   id="task-link"
                   type="url"
                   value={draft.link}
@@ -172,6 +185,7 @@ export function TaskEditor({
               <Field>
                 <FieldLabel>执行方式</FieldLabel>
                 <Select
+                  disabled={readOnly}
                   items={modeItems}
                   value={draft.commandMode}
                   onValueChange={(value) =>
@@ -204,6 +218,7 @@ export function TaskEditor({
               <Field>
                 <FieldLabel htmlFor="task-command">命令</FieldLabel>
                 <Textarea
+                  readOnly={readOnly}
                   id="task-command"
                   required
                   rows={3}
@@ -222,6 +237,7 @@ export function TaskEditor({
                 <Field>
                   <FieldLabel htmlFor="task-arguments">参数</FieldLabel>
                   <Textarea
+                    readOnly={readOnly}
                     id="task-arguments"
                     rows={3}
                     value={draft.arguments.join("\n")}
@@ -242,6 +258,7 @@ export function TaskEditor({
                 <Field>
                   <FieldLabel htmlFor="task-directory">工作目录</FieldLabel>
                   <Input
+                    readOnly={readOnly}
                     id="task-directory"
                     value={draft.workingDir}
                     onChange={(event) =>
@@ -253,6 +270,7 @@ export function TaskEditor({
                 <Field>
                   <FieldLabel htmlFor="task-shell">Shell</FieldLabel>
                   <Input
+                    readOnly={readOnly}
                     id="task-shell"
                     value={draft.shell}
                     onChange={(event) =>
@@ -266,6 +284,7 @@ export function TaskEditor({
               <Field>
                 <FieldLabel htmlFor="task-environment">任务环境变量</FieldLabel>
                 <Textarea
+                  readOnly={readOnly}
                   id="task-environment"
                   rows={3}
                   value={environment}
@@ -281,6 +300,7 @@ export function TaskEditor({
                   <Field>
                     <FieldLabel htmlFor="task-schedule">Cron</FieldLabel>
                     <Input
+                      readOnly={readOnly}
                       id="task-schedule"
                       required
                       value={draft.schedule}
@@ -292,6 +312,7 @@ export function TaskEditor({
                   <Field>
                     <FieldLabel>重叠执行</FieldLabel>
                     <Select
+                      disabled={readOnly}
                       items={overlapItems}
                       value={draft.overlapPolicy}
                       onValueChange={(value) =>
@@ -322,6 +343,7 @@ export function TaskEditor({
                   <Field>
                     <FieldLabel>重启策略</FieldLabel>
                     <Select
+                      disabled={readOnly}
                       items={restartItems}
                       value={draft.restartPolicy}
                       onValueChange={(value) =>
@@ -349,6 +371,7 @@ export function TaskEditor({
                   <Field>
                     <FieldLabel htmlFor="task-retries">失败上限</FieldLabel>
                     <Input
+                      readOnly={readOnly}
                       id="task-retries"
                       type="number"
                       min={1}
@@ -364,6 +387,7 @@ export function TaskEditor({
                   <Field>
                     <FieldLabel htmlFor="task-healthy">健康时长</FieldLabel>
                     <Input
+                      readOnly={readOnly}
                       id="task-healthy"
                       type="number"
                       min={0}
@@ -383,7 +407,12 @@ export function TaskEditor({
           <SheetFooter>
             <Button
               type="submit"
-              disabled={saving || !draft.name.trim() || !draft.command.trim()}
+              disabled={
+                readOnly ||
+                saving ||
+                !draft.name.trim() ||
+                !draft.command.trim()
+              }
             >
               <SaveIcon data-icon="inline-start" />
               {saving ? "保存中" : "保存任务"}

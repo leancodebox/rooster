@@ -29,6 +29,8 @@ type Server struct {
 func New(taskEngine *engine.Engine, assets fs.FS) *Server {
 	s := &Server{engine: taskEngine, assets: assets}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/skill", s.agentSkill)
+	mux.HandleFunc("GET /api/docs", s.apiDocs)
 	mux.HandleFunc("GET /api/health", s.health)
 	mux.HandleFunc("GET /api/tasks", s.listTasks)
 	mux.HandleFunc("POST /api/tasks", s.createTask)

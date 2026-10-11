@@ -58,6 +58,7 @@ import {
 import { cn } from "@/lib/utils"
 import { StatusBadge } from "./status-badge"
 import type { Task } from "./types"
+import { isTaskLocked } from "./types"
 
 interface TaskTableProps {
   tasks: Task[]
@@ -196,16 +197,13 @@ export function TaskTable(props: TaskTableProps) {
                       <HistoryIcon />
                       执行记录
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={task.enabled}
-                      onClick={() => props.onEdit(task)}
-                    >
+                    <DropdownMenuItem onClick={() => props.onEdit(task)}>
                       <PencilIcon />
                       编辑
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       variant="destructive"
-                      disabled={task.enabled}
+                      disabled={isTaskLocked(task)}
                       onClick={() => setPendingDelete(task)}
                     >
                       <Trash2Icon />
@@ -333,16 +331,13 @@ export function TaskTable(props: TaskTableProps) {
                             <HistoryIcon />
                             执行记录
                           </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={task.enabled}
-                            onClick={() => props.onEdit(task)}
-                          >
+                          <DropdownMenuItem onClick={() => props.onEdit(task)}>
                             <PencilIcon />
                             编辑
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             variant="destructive"
-                            disabled={task.enabled}
+                            disabled={isTaskLocked(task)}
                             onClick={() => setPendingDelete(task)}
                           >
                             <Trash2Icon />

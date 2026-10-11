@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,40 @@ import (
 	"github.com/leancodebox/rooster/internal/runner"
 	storesqlite "github.com/leancodebox/rooster/internal/store/sqlite"
 )
+
+func TestAgentDocumentation(t *testing.T) {
+	api := New(nil, nil)
+	for _, endpoint := range []struct {
+		path string
+		file string
+	}{
+		{"/api/skill", "agent/SKILL.md"},
+		{"/api/docs", "agent/references/api.md"},
+	} {
+		t.Run(endpoint.path, func(t *testing.T) {
+			content, err := agentDocuments.ReadFile(endpoint.file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, method := range []string{http.MethodGet, http.MethodHead} {
+				recorder := httptest.NewRecorder()
+				api.http.Handler.ServeHTTP(recorder, httptest.NewRequest(method, endpoint.path, nil))
+				if recorder.Code != http.StatusOK {
+					t.Fatalf("%s status = %d", method, recorder.Code)
+				}
+				if !strings.HasPrefix(recorder.Header().Get("Content-Type"), "text/markdown") {
+					t.Fatalf("unexpected content type: %s", recorder.Header().Get("Content-Type"))
+				}
+				if method == http.MethodGet && !bytes.Equal(recorder.Body.Bytes(), content) {
+					t.Fatal("response does not contain the embedded document")
+				}
+				if method == http.MethodHead && recorder.Body.Len() != 0 {
+					t.Fatal("HEAD response contains a body")
+				}
+			}
+		})
+	}
+}
 
 func TestTaskAPI(t *testing.T) {
 	dir := t.TempDir()

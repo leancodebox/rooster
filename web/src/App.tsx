@@ -26,6 +26,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { ExecutionRail } from "@/features/tasks/execution-rail"
+import { AgentAccess } from "@/features/agent-access"
 import { TaskTable } from "@/features/tasks/task-table"
 import type { Task, TaskKind } from "@/features/tasks/types"
 import { useTasks } from "@/features/tasks/use-tasks"
@@ -128,6 +129,7 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <AgentAccess />
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -242,7 +244,9 @@ export default function App() {
           <TaskEditor
             key={editing?.id ?? `new-${initialKind}`}
             open
-            task={editing}
+            task={
+              service.tasks.find((task) => task.id === editing?.id) ?? editing
+            }
             initialKind={initialKind}
             onOpenChange={setEditorOpen}
             onCreate={service.create}

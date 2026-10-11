@@ -57,6 +57,14 @@ export type TaskDraft = Omit<
   "id" | "createdAt" | "updatedAt" | "runtime" | "nextRuns"
 >
 
+export function isTaskLocked(task: Task) {
+  return (
+    task.enabled ||
+    Boolean(task.runtime.executionId) ||
+    ["starting", "running", "stopping"].includes(task.runtime.state)
+  )
+}
+
 export const emptyTask = (kind: TaskKind = "resident"): TaskDraft => ({
   name: "",
   description: "",
