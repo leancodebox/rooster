@@ -33,12 +33,14 @@
 - Add log follow-output switch and in-page deduplicated retry-exhaustion notification. Show supervisor failure cause, consecutive failures, and next retry time in the execution rail. Mocked-API browser checks verify follow/off scrolling and notification deduplication.
 - Add rotation archive listing/selection, bounded gzip tail preview, and original archive downloads. Backend regression covers archive content/download and traversal rejection; mocked-API browser checks cover selecting an archive and updating the download URL.
 - Add offline `rooster-restore` command: require a new target directory, validate integrity/schema/references, disable restored tasks, mark interrupted executions, and rebase all history log paths into the target directory. Tests cover source preservation, isolation, existing-target rejection and invalid-backup cleanup.
+- Serialize enable/disable persistence and reconciliation; wait for canceled supervisors to exit before replacement, including recovery after interrupted disable requests.
+- Add subprocess forced-exit lock-release regression and five-cycle rapid resident disable/enable regression; both pass under the race detector using temporary directories.
 
-Validation: local frontend production build and ESLint passed; `go test -race ./internal/...` passed with temporary databases. Duplicate-instance, lock-release, startup-failure exhaustion, manual-stop, and concurrent-start regressions are covered. CI has not run remotely; abnormal process termination and rendered UI behavior still need validation.
+Validation: local frontend production build and ESLint passed; `go test -race ./internal/...` passed with temporary databases. Duplicate-instance, forced-exit lock-release, startup-failure exhaustion, manual-stop, concurrent-start and rapid-toggle regressions are covered. Mocked-API browser checks cover maintenance confirmation and log controls. CI has not run remotely; release-wide integrated acceptance is still pending.
 
 ## Remaining Work
 
-- Validate abnormal-exit lock release and rapid disable/enable transitions end to end before release.
+- Release-wide integrated acceptance with an isolated instance before production deployment.
 - Task-specific timeout/concurrency editing in the UI (current limits are instance-wide defaults).
 - Optional scheduled cleanup/total disk budget. Preview/apply UI and backend are implemented; cleanup is not enabled automatically.
 - Optional interactive restore UI and log-bundle import. Guarded offline snapshot restore is implemented; existing directories are never overwritten and archived log files are not part of a database snapshot.

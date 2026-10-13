@@ -303,3 +303,47 @@ func TestPerTaskCapacityDoesNotBlockOtherTasks(t *testing.T) {
 		t.Fatalf("another task was incorrectly blocked: %v", err)
 	}
 }
+
+func TestRapidResidentDisableEnableKeepsNewSupervisor(t *testing.T) {
+	dir := t.TempDir()
+	st, err := storesqlite.Open(filepath.Join(dir, "rooster.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	eng := New(st, runner.New(runner.NewEnvironmentProvider()), filepath.Join(dir, "logs"))
+	defer eng.Close(context.Background())
+	task, err := eng.CreateTask(context.Background(), domain.Task{Name: "rapid-toggle", Kind: domain.TaskKindResident, Enabled: true, CommandMode: domain.CommandModeShell, Command: "sleep 30", OverlapPolicy: domain.OverlapSkip, RestartPolicy: domain.RestartAlways})
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := ""
+	for range 5 {
+		deadline := time.Now().Add(5 * time.Second)
+		started := false
+		for time.Now().Before(deadline) {
+			views, err := eng.ListTasks(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(views) == 1 && views[0].Enabled && views[0].Runtime.ExecutionID != "" && views[0].Runtime.ExecutionID != previous {
+				previous = views[0].Runtime.ExecutionID
+				started = true
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		if !started {
+			t.Fatal("replacement supervisor did not start")
+		}
+		if err := eng.SetEnabled(context.Background(), task.ID, false); err != nil {
+			t.Fatal(err)
+		}
+		if err := eng.SetEnabled(context.Background(), task.ID, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := eng.SetEnabled(context.Background(), task.ID, false); err != nil {
+		t.Fatal(err)
+	}
+}

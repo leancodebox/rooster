@@ -52,6 +52,8 @@ type activeExecution struct {
 type supervisor struct {
 	cancel context.CancelFunc
 	id     string
+	ctx    context.Context
+	done   <-chan struct{}
 }
 
 type Engine struct {
@@ -62,6 +64,7 @@ type Engine struct {
 	cancel context.CancelFunc
 
 	mu          sync.RWMutex
+	reconcileMu sync.Mutex
 	scheduleMu  sync.Mutex
 	active      map[string]*activeExecution
 	starting    map[string]int
@@ -242,6 +245,8 @@ func (e *Engine) DeleteTask(ctx context.Context, id string) error {
 }
 
 func (e *Engine) SetEnabled(ctx context.Context, id string, enabled bool) error {
+	e.reconcileMu.Lock()
+	defer e.reconcileMu.Unlock()
 	if enabled {
 		task, err := e.store.GetTask(ctx, id)
 		if err != nil {
@@ -254,10 +259,16 @@ func (e *Engine) SetEnabled(ctx context.Context, id string, enabled bool) error 
 	if err := e.store.SetTaskEnabled(ctx, id, enabled); err != nil {
 		return err
 	}
-	return e.Reconcile(ctx, id)
+	return e.reconcile(ctx, id)
 }
 
 func (e *Engine) Reconcile(ctx context.Context, id string) error {
+	e.reconcileMu.Lock()
+	defer e.reconcileMu.Unlock()
+	return e.reconcile(ctx, id)
+}
+
+func (e *Engine) reconcile(ctx context.Context, id string) error {
 	task, err := e.store.GetTask(ctx, id)
 	if err != nil {
 		return err
@@ -268,7 +279,6 @@ func (e *Engine) Reconcile(ctx context.Context, id string) error {
 	e.mu.Lock()
 	current, ok := e.supervisors[id]
 	if !task.Enabled && ok {
-		delete(e.supervisors, id)
 		e.runtime[id] = RuntimeState{State: "stopping"}
 		current.cancel()
 		for executionID := range e.byTask[id] {
@@ -277,9 +287,22 @@ func (e *Engine) Reconcile(ctx context.Context, id string) error {
 			}
 		}
 		e.mu.Unlock()
-		return nil
+		select {
+		case <-current.done:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 	e.mu.Unlock()
+	if task.Enabled && ok && current.ctx.Err() != nil {
+		select {
+		case <-current.done:
+			ok = false
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 	if task.Enabled && !ok {
 		e.startSupervisor(task)
 	}
@@ -475,11 +498,13 @@ func (e *Engine) startSupervisor(task domain.Task) {
 		return
 	}
 	supervisorID := uuid.NewString()
-	e.supervisors[task.ID] = supervisor{cancel: cancel, id: supervisorID}
+	done := make(chan struct{})
+	e.supervisors[task.ID] = supervisor{cancel: cancel, id: supervisorID, ctx: ctx, done: done}
 	e.wg.Add(1)
 	e.mu.Unlock()
 	go func() {
 		defer e.wg.Done()
+		defer close(done)
 		defer func() {
 			e.mu.Lock()
 			defer e.mu.Unlock()
