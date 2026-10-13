@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/tooltip"
 import { ExecutionRail } from "@/features/tasks/execution-rail"
 import { AgentAccess } from "@/features/agent-access"
+import { DataMaintenance } from "@/features/data-maintenance"
 import { TaskTable } from "@/features/tasks/task-table"
 import type { Task, TaskKind } from "@/features/tasks/types"
 import { useTasks } from "@/features/tasks/use-tasks"
@@ -154,6 +155,7 @@ export default function App() {
           </div>
           <div className="flex items-center gap-2">
             <AgentAccess />
+            <DataMaintenance />
             <Tooltip>
               <TooltipTrigger
                 render={

@@ -1,5 +1,14 @@
 import type { Execution, Task, TaskDraft } from "./types"
 
+export interface RetentionResult {
+  dryRun: boolean
+  candidates: number
+  deleted: number
+  files: number
+  bytes: number
+  errors: string[]
+}
+
 class ApiError extends Error {
   readonly status: number
 
@@ -27,6 +36,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  retention(days: number, keepPerTask: number, dryRun = true) {
+    return request<RetentionResult>("/api/maintenance/retention", {
+      method: "POST",
+      body: JSON.stringify({ days, keepPerTask, dryRun }),
+    })
+  },
   async tasks() {
     const result = await request<{ tasks: Task[] | null }>("/api/tasks")
     return Array.isArray(result.tasks) ? result.tasks : []
