@@ -45,6 +45,7 @@ func New(taskEngine *engine.Engine, assets fs.FS) *Server {
 	mux.HandleFunc("GET /api/tasks/{id}/executions", s.listExecutions)
 	mux.HandleFunc("POST /api/executions/{id}/stop", s.stopExecution)
 	mux.HandleFunc("GET /api/executions/{id}/logs", s.executionLogs)
+	mux.HandleFunc("GET /api/executions/{id}/logfiles", s.executionLogFiles)
 	mux.Handle("/", s.webHandler())
 	s.http = &http.Server{Handler: requestLog(mux), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 0, IdleTimeout: 60 * time.Second}
 	return s
@@ -141,6 +142,10 @@ func (s *Server) executionLogs(w http.ResponseWriter, r *http.Request) {
 	execution, err := s.engine.GetExecution(r.Context(), r.PathValue("id"))
 	if err != nil {
 		writeError(w, err)
+		return
+	}
+	if archive := r.URL.Query().Get("archive"); archive != "" {
+		s.archiveLog(w, r, execution.LogPath, archive)
 		return
 	}
 	f, err := os.Open(execution.LogPath)

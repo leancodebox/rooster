@@ -36,6 +36,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  async logFiles(executionId: string) {
+    const result = await request<{
+      archives: Array<{ name: string; size: number }>
+    }>(`/api/executions/${encodeURIComponent(executionId)}/logfiles`)
+    return result.archives
+  },
+  logURL(executionId: string, archive = "", download = false) {
+    const query = new URLSearchParams()
+    if (archive) query.set("archive", archive)
+    if (download) query.set("download", "1")
+    return `/api/executions/${encodeURIComponent(executionId)}/logs?${query}`
+  },
   retention(days: number, keepPerTask: number, dryRun = true) {
     return request<RetentionResult>("/api/maintenance/retention", {
       method: "POST",
@@ -81,8 +93,8 @@ export const api = {
     )
     return Array.isArray(result.executions) ? result.executions : []
   },
-  async log(executionId: string) {
-    const response = await fetch(`/api/executions/${executionId}/logs`)
+  async log(executionId: string, archive = "") {
+    const response = await fetch(api.logURL(executionId, archive))
     if (!response.ok) throw new ApiError("日志尚未生成", response.status)
     return response.text()
   },

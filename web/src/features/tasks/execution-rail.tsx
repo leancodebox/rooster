@@ -35,6 +35,14 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { api } from "./api"
 import { messageOf } from "./use-tasks"
 import type { Execution, Task } from "./types"
@@ -48,6 +56,20 @@ export function ExecutionRail({ task }: { task: Task | null }) {
   const [logQuery, setLogQuery] = useState("")
   const [followOutput, setFollowOutput] = useState(true)
   const logViewport = useRef<HTMLDivElement>(null)
+  const [archive, setArchive] = useState("")
+  const [archives, setArchives] = useState<
+    Array<{ name: string; size: number }>
+  >([])
+  const logFileItems = useMemo(
+    () => [
+      { value: "", label: "当前日志" },
+      ...archives.map((file, index) => ({
+        value: file.name,
+        label: `归档 ${index + 1} · ${(file.size / 1024).toFixed(1)} KiB`,
+      })),
+    ],
+    [archives]
+  )
   const displayedLog = useMemo(() => {
     const query = logQuery.trim().toLowerCase()
     return query
@@ -97,26 +119,52 @@ export function ExecutionRail({ task }: { task: Task | null }) {
   useEffect(() => {
     if (!selectedId) return
     let active = true
+    async function loadFiles(quiet = false) {
+      try {
+        const files = await api.logFiles(selectedId!)
+        if (active) setArchives(files)
+      } catch (error) {
+        if (active && !quiet)
+          toast.error(`归档列表读取失败：${messageOf(error)}`)
+      }
+    }
+    const initial = window.setTimeout(() => void loadFiles(), 0)
+    const timer = logIsLive
+      ? window.setInterval(() => void loadFiles(true), 10000)
+      : undefined
+    return () => {
+      active = false
+      window.clearTimeout(initial)
+      window.clearInterval(timer)
+    }
+  }, [selectedId, logIsLive])
+
+  useEffect(() => {
+    if (!selectedId) return
+    let active = true
     async function loadLog() {
       try {
-        const value = await api.log(selectedId!)
+        const value = await api.log(selectedId!, archive)
         if (active) setLog(value)
       } catch (error) {
         if (active) setLog(messageOf(error))
       }
     }
     const initialTimer = window.setTimeout(() => void loadLog(), 0)
-    const timer = logIsLive
-      ? window.setInterval(() => void loadLog(), 1_000)
-      : undefined
+    const timer =
+      logIsLive && !archive
+        ? window.setInterval(() => void loadLog(), 1_000)
+        : undefined
     return () => {
       active = false
       window.clearTimeout(initialTimer)
       window.clearInterval(timer)
     }
-  }, [selectedId, logIsLive])
+  }, [selectedId, logIsLive, archive])
 
   function inspect(execution: Execution) {
+    setArchive("")
+    setArchives([])
     setFollowOutput(true)
     setLogQuery("")
     setLog("正在读取日志...")
@@ -222,7 +270,7 @@ export function ExecutionRail({ task }: { task: Task | null }) {
           }
         }}
       >
-        <DialogContent className="flex h-[min(80svh,720px)] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-xl p-0 sm:max-w-5xl">
+        <DialogContent className="flex h-[min(80svh,720px)] w-[calc(100vw-2rem)] max-w-5xl flex-col gap-0 overflow-hidden rounded-xl p-0 sm:w-full sm:max-w-5xl">
           {selected ? (
             <>
               <DialogHeader className="border-b px-5 py-4 pr-12">
@@ -240,8 +288,35 @@ export function ExecutionRail({ task }: { task: Task | null }) {
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-wrap items-center gap-2 border-b px-5 py-2">
+                <Select
+                  items={logFileItems}
+                  value={archive}
+                  onValueChange={(value) => {
+                    if (value !== null) {
+                      setArchive(value)
+                      setLog("正在读取日志...")
+                      setLogQuery("")
+                    }
+                  }}
+                >
+                  <SelectTrigger
+                    aria-label="日志文件"
+                    className="w-full sm:w-44"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {logFileItems.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
                 <Input
-                  className="min-w-0 flex-1"
+                  className="min-w-0 flex-1 basis-full sm:basis-auto"
                   value={logQuery}
                   onChange={(event) => setLogQuery(event.target.value)}
                   placeholder="筛选当前加载日志"
@@ -287,9 +362,9 @@ export function ExecutionRail({ task }: { task: Task | null }) {
                         nativeButton={false}
                         render={
                           <a
-                            href={`/api/executions/${encodeURIComponent(selected.id)}/logs?download=1`}
+                            href={api.logURL(selected.id, archive, true)}
                             download
-                            aria-label="下载完整当前日志"
+                            aria-label="下载所选日志文件"
                           />
                         }
                       />
@@ -297,9 +372,14 @@ export function ExecutionRail({ task }: { task: Task | null }) {
                   >
                     <DownloadIcon />
                   </TooltipTrigger>
-                  <TooltipContent>下载完整当前日志</TooltipContent>
+                  <TooltipContent>下载所选日志文件</TooltipContent>
                 </Tooltip>
               </div>
+              {archive ? (
+                <p className="shrink-0 px-5 py-1 font-mono text-xs break-all text-muted-foreground">
+                  {archive}
+                </p>
+              ) : null}
               {selected.error ? (
                 <p
                   role="status"

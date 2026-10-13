@@ -33,6 +33,9 @@ No pagination cursor, idempotency key, PATCH, or bulk operation is supported.
 | POST | `/api/executions/{id}/stop` | 202 | No body; `{"status":"stopping"}`; asynchronous |
 | GET | `/api/executions/{id}/logs` | 200 | `text/plain; charset=utf-8`, last 64 KiB of current log file |
 | GET | `/api/executions/{id}/logs?download=1` | 200 | Complete current log file attachment; excludes rotated archives |
+| GET | `/api/executions/{id}/logfiles` | 200 | `{"archives":[{"name":"...log.gz","size":123}]}`, newest filename first |
+| GET | `/api/executions/{id}/logs?archive={name}` | 200 | Last 64 KiB of decompressed archive, with a 32 MiB decompression limit |
+| GET | `/api/executions/{id}/logs?archive={name}&download=1` | 200 | Original archive attachment, retaining gzip compression |
 
 `{id}` is a server-generated task or execution UUID, according to the path.
 Execution-list `limit` is an integer from 1 to 200; missing, invalid, zero,
@@ -41,6 +44,9 @@ return an empty array; use the task list to check existence.
 Logs return 404 when the execution or its current log file is absent. A log
 can be unavailable briefly after dispatch. Rotation means this endpoint does
 not include archived log files. Stop returns 404 for an inactive execution.
+Archives are accessed separately using names returned by logfiles. URL-encode
+the name. Only regular matching rotation files in the execution's log directory
+are accepted; traversal paths and symbolic-link files are rejected.
 Stopping an enabled resident execution also disables automatic supervision.
 Stopping a scheduled execution leaves future scheduled triggers enabled.
 
