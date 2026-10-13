@@ -28,6 +28,9 @@ export interface Task {
     state: RuntimeState
     executionId?: string
     pid?: number
+    error?: string
+    retryCount?: number
+    nextRetryAt?: string
   }
 }
 

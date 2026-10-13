@@ -8,11 +8,30 @@ export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const mounted = useRef(true)
+  const previousStates = useRef<Map<string, string> | null>(null)
 
   const refresh = useCallback(async (quiet = false) => {
     try {
       const next = await api.tasks()
-      if (mounted.current) setTasks(next)
+      if (mounted.current) {
+        for (const task of next) {
+          if (
+            previousStates.current &&
+            task.runtime.state === "failed" &&
+            previousStates.current.get(task.id) !== "failed"
+          ) {
+            toast.error(`${task.name} 已停止自动运行`, {
+              id: `task-failure-${task.id}`,
+              description: task.runtime.error || "连续失败已达到重试上限",
+              duration: 10000,
+            })
+          }
+        }
+        previousStates.current = new Map(
+          next.map((task) => [task.id, task.runtime.state])
+        )
+        setTasks(next)
+      }
     } catch (error) {
       if (!quiet) toast.error(messageOf(error))
     } finally {

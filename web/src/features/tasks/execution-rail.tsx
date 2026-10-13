@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   Clock3Icon,
   CopyIcon,
@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/empty"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
 import { api } from "./api"
 import { messageOf } from "./use-tasks"
 import type { Execution, Task } from "./types"
@@ -45,6 +46,8 @@ export function ExecutionRail({ task }: { task: Task | null }) {
   const [log, setLog] = useState("")
   const [loading, setLoading] = useState(false)
   const [logQuery, setLogQuery] = useState("")
+  const [followOutput, setFollowOutput] = useState(true)
+  const logViewport = useRef<HTMLDivElement>(null)
   const displayedLog = useMemo(() => {
     const query = logQuery.trim().toLowerCase()
     return query
@@ -59,6 +62,15 @@ export function ExecutionRail({ task }: { task: Task | null }) {
   const logIsLive =
     selected != null &&
     ["queued", "starting", "running", "stopping"].includes(selected.status)
+
+  useEffect(() => {
+    if (!selectedId || !followOutput) return
+    const frame = requestAnimationFrame(() => {
+      const viewport = logViewport.current
+      if (viewport) viewport.scrollTop = viewport.scrollHeight
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [displayedLog, followOutput, selectedId])
 
   useEffect(() => {
     if (!taskId) return
@@ -105,6 +117,7 @@ export function ExecutionRail({ task }: { task: Task | null }) {
   }, [selectedId, logIsLive])
 
   function inspect(execution: Execution) {
+    setFollowOutput(true)
     setLogQuery("")
     setLog("正在读取日志...")
     setSelectedId(execution.id)
@@ -134,6 +147,21 @@ export function ExecutionRail({ task }: { task: Task | null }) {
           {task.kind === "resident" ? "常驻" : "定时"}
         </Badge>
       </div>
+      {task.runtime.error ? (
+        <div className="flex flex-col gap-1 px-4 pb-3 text-xs">
+          <p className="break-words text-destructive">{task.runtime.error}</p>
+          {task.runtime.retryCount ? (
+            <p className="text-muted-foreground">
+              连续失败 {task.runtime.retryCount} 次
+            </p>
+          ) : null}
+          {task.runtime.nextRetryAt ? (
+            <p className="text-muted-foreground">
+              下次重试：{formatDate(task.runtime.nextRetryAt)}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       <Separator />
       {executions.length === 0 && !loading ? (
         <Empty className="border-0">
@@ -211,7 +239,7 @@ export function ExecutionRail({ task }: { task: Task | null }) {
                     : ""}
                 </DialogDescription>
               </DialogHeader>
-              <div className="flex items-center gap-2 border-b px-5 py-2">
+              <div className="flex flex-wrap items-center gap-2 border-b px-5 py-2">
                 <Input
                   className="min-w-0 flex-1"
                   value={logQuery}
@@ -219,6 +247,15 @@ export function ExecutionRail({ task }: { task: Task | null }) {
                   placeholder="筛选当前加载日志"
                   aria-label="筛选当前加载日志"
                 />
+                <label className="flex shrink-0 items-center gap-2 text-xs">
+                  <Switch
+                    size="sm"
+                    checked={followOutput}
+                    onCheckedChange={setFollowOutput}
+                    aria-label="跟随输出"
+                  />
+                  跟随输出
+                </label>
                 <Tooltip>
                   <TooltipTrigger
                     render={
@@ -271,7 +308,7 @@ export function ExecutionRail({ task }: { task: Task | null }) {
                   {selected.error}
                 </p>
               ) : null}
-              <ScrollArea className="min-h-0 flex-1">
+              <ScrollArea viewportRef={logViewport} className="min-h-0 flex-1">
                 <pre className="min-h-full bg-terminal p-5 font-mono text-xs leading-5 break-all whitespace-pre-wrap text-terminal-foreground">
                   {displayedLog ||
                     (logQuery.trim() ? "没有匹配的日志" : "暂无输出")}

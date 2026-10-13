@@ -30,6 +30,7 @@
 - Review fixes: consume persisted results when a short command completes before supervisor lookup; keep the instance lock/database until asynchronous shutdown finishes.
 - Add log-tail line filtering, copy displayed output, full-current-file download, and execution failure reason display in the log dialog. Build/lint passed; rendered interaction validation remains pending.
 - Add data-maintenance dialog with configuration/database downloads, retention inputs, preview invalidation on changes, and explicit deletion confirmation. Mocked-API Playwright checks passed at desktop/mobile sizes; no production backend was contacted.
+- Add log follow-output switch and in-page deduplicated retry-exhaustion notification. Show supervisor failure cause, consecutive failures, and next retry time in the execution rail. Mocked-API browser checks verify follow/off scrolling and notification deduplication.
 
 Validation: local frontend production build and ESLint passed; `go test -race ./internal/...` passed with temporary databases. Duplicate-instance, lock-release, startup-failure exhaustion, manual-stop, and concurrent-start regressions are covered. CI has not run remotely; abnormal process termination and rendered UI behavior still need validation.
 
@@ -39,8 +40,8 @@ Validation: local frontend production build and ESLint passed; `go test -race ./
 - Task-specific timeout/concurrency editing in the UI (current limits are instance-wide defaults).
 - Optional scheduled cleanup/total disk budget. Preview/apply UI and backend are implemented; cleanup is not enabled automatically.
 - Guarded restore workflow and log-directory portability. Backup/export UI and snapshot reopening are covered; an interactive restore workflow is not implemented.
-- Record skip, cancellation, timeout, and retry-exhaustion reasons; add failure notifications.
-- Follow-output control and historical archive access. Tail filtering, copy and current-file download are implemented; they do not search archived output.
+- Persist skip/cancellation reasons and add native tray notifications; in-page retry-exhaustion feedback and timeout failure reasons are implemented.
+- Historical archive access. Follow-output control, tail filtering, copy and current-file download are implemented; they do not search archived output.
 - Retain stable task selection during runtime updates and expand lifecycle transition regressions.
 
 ## Notes
