@@ -33,6 +33,9 @@ func New(taskEngine *engine.Engine, assets fs.FS) *Server {
 	mux.HandleFunc("GET /api/docs", s.apiDocs)
 	mux.HandleFunc("GET /api/health", s.health)
 	mux.HandleFunc("GET /api/tasks", s.listTasks)
+	mux.HandleFunc("GET /api/export", s.exportTasks)
+	mux.HandleFunc("GET /api/backup", s.backup)
+	mux.HandleFunc("POST /api/maintenance/retention", s.retention)
 	mux.HandleFunc("POST /api/tasks", s.createTask)
 	mux.HandleFunc("PUT /api/tasks/{id}", s.updateTask)
 	mux.HandleFunc("DELETE /api/tasks/{id}", s.deleteTask)
@@ -152,7 +155,9 @@ func (s *Server) executionLogs(w http.ResponseWriter, r *http.Request) {
 	defer f.Close()
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	if info, statErr := f.Stat(); statErr == nil && info.Size() > 64*1024 {
+	if r.URL.Query().Get("download") == "1" {
+		w.Header().Set("Content-Disposition", `attachment; filename="execution.log"`)
+	} else if info, statErr := f.Stat(); statErr == nil && info.Size() > 64*1024 {
 		_, _ = f.Seek(info.Size()-64*1024, io.SeekStart)
 	}
 	if _, err := io.Copy(w, f); err != nil {
@@ -200,7 +205,7 @@ func writeError(w http.ResponseWriter, err error) {
 	status := http.StatusUnprocessableEntity
 	if errors.Is(err, store.ErrNotFound) {
 		status = http.StatusNotFound
-	} else if errors.Is(err, engine.ErrAlreadyRunning) {
+	} else if errors.Is(err, engine.ErrAlreadyRunning) || errors.Is(err, engine.ErrConcurrencyLimit) {
 		status = http.StatusConflict
 	}
 	writeJSON(w, status, map[string]string{"error": err.Error()})

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/leancodebox/rooster/internal/domain"
@@ -38,6 +39,24 @@ func Open(path string) (*Store, error) {
 }
 
 func (s *Store) Close() error { return s.db.Close() }
+
+// VACUUM INTO includes committed WAL data in a self-contained consistent snapshot.
+// SQLite refuses to overwrite a nonempty destination.
+func (s *Store) Backup(ctx context.Context, destination string) error {
+	file, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("create backup destination: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, "VACUUM INTO ?", destination)
+	if err != nil {
+		_ = os.Remove(destination)
+		return fmt.Errorf("backup sqlite: %w", err)
+	}
+	return nil
+}
 
 func (s *Store) migrate(ctx context.Context) error {
 	const schema = `

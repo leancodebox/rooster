@@ -66,23 +66,47 @@ export default function App() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<Task | null>(null)
   const [initialKind, setInitialKind] = useState<TaskKind>("resident")
+  const [ordering, setOrdering] = useState<{ sort: Sort; ids: string[] }>({
+    sort: "status",
+    ids: [],
+  })
 
-  const visibleTasks = useMemo(
-    () =>
-      service.tasks
-        .filter((task) => {
-          if (filter === "running" && task.runtime.state !== "running")
-            return false
-          if (filter !== "all" && filter !== "running" && task.kind !== filter)
-            return false
-          if (!deferredQuery) return true
-          return `${task.name} ${task.description} ${task.command}`
-            .toLowerCase()
-            .includes(deferredQuery)
-        })
-        .toSorted((left, right) => compareTasks(left, right, sort)),
-    [service.tasks, filter, deferredQuery, sort]
-  )
+  // Live updates change row contents, but only an explicit sort changes positions.
+  let orderedIds = ordering.ids
+  if (
+    ordering.sort !== sort ||
+    (ordering.ids.length === 0 && service.tasks.length > 0)
+  ) {
+    orderedIds = service.tasks
+      .toSorted((left, right) => compareTasks(left, right, sort))
+      .map((task) => task.id)
+    setOrdering({ sort, ids: orderedIds })
+  } else {
+    const known = new Set(ordering.ids)
+    const added = service.tasks.filter((task) => !known.has(task.id))
+    if (added.length > 0) {
+      orderedIds = [...ordering.ids, ...added.map((task) => task.id)]
+      setOrdering({ sort, ids: orderedIds })
+    }
+  }
+
+  const visibleTasks = useMemo(() => {
+    const positions = new Map(orderedIds.map((id, index) => [id, index]))
+    return service.tasks
+      .filter((task) => {
+        if (filter === "running" && task.runtime.state !== "running")
+          return false
+        if (filter !== "all" && filter !== "running" && task.kind !== filter)
+          return false
+        if (!deferredQuery) return true
+        return `${task.name} ${task.description} ${task.command}`
+          .toLowerCase()
+          .includes(deferredQuery)
+      })
+      .toSorted(
+        (left, right) => positions.get(left.id)! - positions.get(right.id)!
+      )
+  }, [service.tasks, filter, deferredQuery, orderedIds])
   const counts = useMemo(
     () =>
       service.tasks.reduce(

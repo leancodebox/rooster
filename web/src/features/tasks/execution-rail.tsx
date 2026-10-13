@@ -37,6 +37,9 @@ export function ExecutionRail({ task }: { task: Task | null }) {
   const [loading, setLoading] = useState(false)
   const selected =
     executions.find((execution) => execution.id === selectedId) ?? null
+  const logIsLive =
+    selected != null &&
+    ["queued", "starting", "running", "stopping"].includes(selected.status)
 
   useEffect(() => {
     if (!taskId) return
@@ -72,13 +75,15 @@ export function ExecutionRail({ task }: { task: Task | null }) {
       }
     }
     const initialTimer = window.setTimeout(() => void loadLog(), 0)
-    const timer = window.setInterval(() => void loadLog(), 1_000)
+    const timer = logIsLive
+      ? window.setInterval(() => void loadLog(), 1_000)
+      : undefined
     return () => {
       active = false
       window.clearTimeout(initialTimer)
       window.clearInterval(timer)
     }
-  }, [selectedId])
+  }, [selectedId, logIsLive])
 
   function inspect(execution: Execution) {
     setLog("正在读取日志...")

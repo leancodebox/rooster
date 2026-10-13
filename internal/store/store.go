@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/leancodebox/rooster/internal/domain"
 )
@@ -14,6 +15,7 @@ func (e domainError) Error() string { return string(e) }
 
 type Store interface {
 	Close() error
+	Backup(context.Context, string) error
 	ListTasks(context.Context) ([]domain.Task, error)
 	GetTask(context.Context, string) (domain.Task, error)
 	CreateTask(context.Context, domain.Task) (domain.Task, error)
@@ -25,4 +27,6 @@ type Store interface {
 	UpdateExecution(context.Context, domain.Execution) error
 	ListExecutions(context.Context, string, int) ([]domain.Execution, error)
 	MarkInterruptedExecutions(context.Context) error
+	RetentionCandidates(context.Context, time.Time, int) ([]domain.Execution, error)
+	DeleteFinishedExecution(context.Context, string) error
 }

@@ -20,6 +20,9 @@ No pagination cursor, idempotency key, PATCH, or bulk operation is supported.
 | GET | `/api/docs` | 200 | This API reference as Markdown |
 | GET | `/api/health` | 200 | `{"status":"ok"}` |
 | GET | `/api/tasks` | 200 | `{"tasks":[TaskView,...]}`; empty list is `[]` |
+| GET | `/api/export` | 200 | Versioned JSON attachment containing task definitions |
+| GET | `/api/backup` | 200 | Consistent SQLite snapshot attachment, including committed WAL data |
+| POST | `/api/maintenance/retention` | 200 | Preview or explicitly execute terminal-history/log retention |
 | POST | `/api/tasks` | 201 | Task configuration body; returns Task |
 | PUT | `/api/tasks/{id}` | 200 | Full Task configuration; returns Task; disable and stop first |
 | DELETE | `/api/tasks/{id}` | 204 | No body; disable and stop first; empty response |
@@ -29,6 +32,7 @@ No pagination cursor, idempotency key, PATCH, or bulk operation is supported.
 | GET | `/api/tasks/{id}/executions?limit=50` | 200 | `{"executions":[Execution,...]}`, newest first |
 | POST | `/api/executions/{id}/stop` | 202 | No body; `{"status":"stopping"}`; asynchronous |
 | GET | `/api/executions/{id}/logs` | 200 | `text/plain; charset=utf-8`, last 64 KiB of current log file |
+| GET | `/api/executions/{id}/logs?download=1` | 200 | Complete current log file attachment; excludes rotated archives |
 
 `{id}` is a server-generated task or execution UUID, according to the path.
 Execution-list `limit` is an integer from 1 to 200; missing, invalid, zero,
@@ -37,6 +41,42 @@ return an empty array; use the task list to check existence.
 Logs return 404 when the execution or its current log file is absent. A log
 can be unavailable briefly after dispatch. Rotation means this endpoint does
 not include archived log files. Stop returns 404 for an inactive execution.
+Stopping an enabled resident execution also disables automatic supervision.
+Stopping a scheduled execution leaves future scheduled triggers enabled.
+
+Instance-wide optional limits: `ROOSTER_MAX_CONCURRENT` and
+`ROOSTER_MAX_PER_TASK` cap active/starting executions; at capacity, manual
+execution requests return 409 and are not queued. `ROOSTER_EXECUTION_TIMEOUT`
+accepts Go durations such as `30m` and applies to all execution types. Zero or
+unset disables each limit. Timeouts record failure with `context deadline exceeded`.
+
+Backup snapshots contain tasks, environment values, and execution metadata;
+log files are not included. Exported configurations also contain environment
+values. Keep these downloads private. Backup creation never replaces an existing
+file. Restore is currently an offline procedure: close the destination instance,
+use a separate data directory, and open the downloaded database there. Enabled
+tasks in a restored database resume when Rooster starts; use isolated test commands
+when validating restoration. Log paths retain their original locations.
+
+## History and log retention
+
+POST a JSON body to `/api/maintenance/retention`. Defaults are
+`{"days":30,"keepPerTask":100,"dryRun":true}`. Send `{}` to preview with
+defaults; only an explicit `"dryRun":false` performs deletion. Days must be
+1 through 36500, and keepPerTask must be at least 1.
+
+Only terminal executions whose finished time is older than the cutoff and
+which fall outside each task's latest keepPerTask records qualify. Active
+executions are excluded. Managed current logs and their rotation archives
+are removed before deleting execution metadata. External/migrated log paths
+and symlinked task directories are skipped with an error.
+
+The response includes dryRun, candidates, deleted, files, bytes, and errors.
+Files and bytes describe the qualifying file plan, not guaranteed space
+reclaimed when errors occur. File removal and database deletion are not atomic:
+on a partial failure, some logs can be missing while the record remains.
+Check errors even for HTTP 200, and take a backup before applying cleanup.
+There is no automatic cleanup schedule or total-disk quota yet.
 
 ## Task configuration
 

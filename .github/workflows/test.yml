@@ -1,0 +1,23 @@
+name: Tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev
+      - run: pnpm install --frozen-lockfile
+        working-directory: web
+      - run: make test
+      - run: go test -race ./internal/...

@@ -46,6 +46,9 @@ func New(environment *EnvironmentProvider) *Runner {
 }
 
 func (r *Runner) Start(parent context.Context, task domain.Task, logPath string) (*Handle, error) {
+	if err := parent.Err(); err != nil {
+		return nil, err
+	}
 	if err := task.Validate(); err != nil {
 		return nil, err
 	}
@@ -70,6 +73,10 @@ func (r *Runner) Start(parent context.Context, task domain.Task, logPath string)
 	cmd.Stderr = logFile
 	configureProcess(cmd)
 	started := time.Now().UTC()
+	if err := parent.Err(); err != nil {
+		logFile.Close()
+		return nil, err
+	}
 	if err := cmd.Start(); err != nil {
 		logFile.Close()
 		return nil, fmt.Errorf("start command: %w", err)
@@ -99,7 +106,7 @@ func (r *Runner) Start(parent context.Context, task domain.Task, logPath string)
 				_ = killProcessTree(cmd)
 				result = <-waitDone
 			}
-			result.Err = context.Canceled
+			result.Err = ctx.Err()
 		}
 		cancel()
 		h.mu.Lock()

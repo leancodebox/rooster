@@ -40,8 +40,8 @@ curl --fail-with-body "$ROOSTER_BASE_URL/api/docs"
   at most the last 64 KiB, not JSON or a live stream.
 - Before editing or deleting, disable the task, stop any remaining active
   executions, and wait for their terminal states. Disabling a scheduled task
-  does not stop existing executions. Disable a resident supervisor before
-  stopping its execution to avoid automatic restart.
+  does not stop existing executions. Stopping an enabled resident execution
+  also disables its automation so its supervisor does not restart it.
 - Update with `PUT /api/tasks/{id}` using the full configuration from the task
   list, preserving unrelated fields and `kind`. PUT replaces configuration;
   it is not a partial update. Re-enable only when the requested outcome requires it.

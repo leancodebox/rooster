@@ -18,11 +18,21 @@ import (
 )
 
 var ErrAlreadyRunning = errors.New("task already has an active execution")
+var ErrConcurrencyLimit = errors.New("execution concurrency limit reached")
+
+type Limits struct {
+	MaxConcurrent    int
+	MaxPerTask       int
+	ExecutionTimeout time.Duration
+}
 
 type RuntimeState struct {
-	State       string `json:"state"`
-	ExecutionID string `json:"executionId,omitempty"`
-	PID         int    `json:"pid,omitempty"`
+	State       string     `json:"state"`
+	ExecutionID string     `json:"executionId,omitempty"`
+	PID         int        `json:"pid,omitempty"`
+	Error       string     `json:"error,omitempty"`
+	RetryCount  int        `json:"retryCount,omitempty"`
+	NextRetryAt *time.Time `json:"nextRetryAt,omitempty"`
 }
 
 type TaskView struct {
@@ -36,9 +46,13 @@ type activeExecution struct {
 	handle   *runner.Handle
 	mu       sync.Mutex
 	finished bool
+	cancel   context.CancelFunc
 }
 
-type supervisor struct{ cancel context.CancelFunc }
+type supervisor struct {
+	cancel context.CancelFunc
+	id     string
+}
 
 type Engine struct {
 	store  store.Store
@@ -50,17 +64,25 @@ type Engine struct {
 	mu          sync.RWMutex
 	scheduleMu  sync.Mutex
 	active      map[string]*activeExecution
+	starting    map[string]int
 	byTask      map[string]map[string]struct{}
 	runtime     map[string]RuntimeState
 	supervisors map[string]supervisor
 	scheduler   *cron.Cron
 	wg          sync.WaitGroup
 	closing     bool
+	limits      Limits
+	slots       int
+	closeDone   chan struct{}
 }
 
-func New(st store.Store, processRunner *runner.Runner, logDir string) *Engine {
+func New(st store.Store, processRunner *runner.Runner, logDir string, limits ...Limits) *Engine {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Engine{store: st, runner: processRunner, logDir: logDir, ctx: ctx, cancel: cancel, active: map[string]*activeExecution{}, byTask: map[string]map[string]struct{}{}, runtime: map[string]RuntimeState{}, supervisors: map[string]supervisor{}}
+	e := &Engine{store: st, runner: processRunner, logDir: logDir, ctx: ctx, cancel: cancel, active: map[string]*activeExecution{}, byTask: map[string]map[string]struct{}{}, runtime: map[string]RuntimeState{}, supervisors: map[string]supervisor{}, closeDone: make(chan struct{})}
+	if len(limits) > 0 {
+		e.limits = limits[0]
+	}
+	return e
 }
 
 func (e *Engine) Start(ctx context.Context) error {
@@ -84,28 +106,28 @@ func (e *Engine) Start(ctx context.Context) error {
 
 func (e *Engine) Close(ctx context.Context) error {
 	e.scheduleMu.Lock()
-	defer e.scheduleMu.Unlock()
 	e.mu.Lock()
 	if e.closing {
 		e.mu.Unlock()
-		return nil
+		e.scheduleMu.Unlock()
+	} else {
+		e.closing = true
+		if e.scheduler != nil {
+			e.scheduler.Stop()
+		}
+		for _, s := range e.supervisors {
+			s.cancel()
+		}
+		for _, a := range e.active {
+			a.handle.Stop()
+		}
+		e.cancel()
+		e.mu.Unlock()
+		e.scheduleMu.Unlock()
+		go func() { e.wg.Wait(); close(e.closeDone) }()
 	}
-	e.closing = true
-	if e.scheduler != nil {
-		e.scheduler.Stop()
-	}
-	for _, s := range e.supervisors {
-		s.cancel()
-	}
-	for _, a := range e.active {
-		a.handle.Stop()
-	}
-	e.cancel()
-	e.mu.Unlock()
-	done := make(chan struct{})
-	go func() { e.wg.Wait(); close(done) }()
 	select {
-	case <-done:
+	case <-e.closeDone:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -284,6 +306,15 @@ func (e *Engine) StopExecution(id string) error {
 	if a.finished {
 		return store.ErrNotFound
 	}
+	task, err := e.store.GetTask(context.Background(), a.taskID)
+	if err != nil {
+		return err
+	}
+	if task.Kind == domain.TaskKindResident && task.Enabled {
+		if err := e.SetEnabled(context.Background(), task.ID, false); err != nil {
+			return err
+		}
+	}
 	execution, err := e.store.GetExecution(context.Background(), id)
 	if err != nil {
 		return err
@@ -308,16 +339,51 @@ func (e *Engine) GetExecution(ctx context.Context, id string) (domain.Execution,
 }
 
 func (e *Engine) dispatch(task domain.Task, trigger domain.Trigger) (domain.Execution, error) {
-	e.mu.RLock()
-	count := len(e.byTask[task.ID])
-	closing := e.closing
-	e.mu.RUnlock()
-	if closing {
+	return e.dispatchContext(e.ctx, task, trigger)
+}
+
+func (e *Engine) dispatchContext(ctx context.Context, task domain.Task, trigger domain.Trigger) (domain.Execution, error) {
+	e.mu.Lock()
+	if e.closing {
+		e.mu.Unlock()
 		return domain.Execution{}, errors.New("engine is shutting down")
 	}
-	if count > 0 && task.OverlapPolicy != domain.OverlapParallel {
+	if len(e.byTask[task.ID])+e.starting[task.ID] > 0 && task.OverlapPolicy != domain.OverlapParallel {
+		e.mu.Unlock()
 		return domain.Execution{}, ErrAlreadyRunning
 	}
+	if (e.limits.MaxConcurrent > 0 && e.slots >= e.limits.MaxConcurrent) ||
+		(e.limits.MaxPerTask > 0 && len(e.byTask[task.ID])+e.starting[task.ID] >= e.limits.MaxPerTask) {
+		e.mu.Unlock()
+		return domain.Execution{}, ErrConcurrencyLimit
+	}
+	if e.starting == nil {
+		e.starting = make(map[string]int)
+	}
+	e.starting[task.ID]++
+	e.slots++
+	e.wg.Add(1)
+	e.mu.Unlock()
+	handedOff := false
+	var cancel context.CancelFunc
+	if e.limits.ExecutionTimeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, e.limits.ExecutionTimeout)
+	}
+	defer func() {
+		e.mu.Lock()
+		e.starting[task.ID]--
+		if e.starting[task.ID] == 0 {
+			delete(e.starting, task.ID)
+		}
+		if !handedOff {
+			e.slots--
+		}
+		e.mu.Unlock()
+		if !handedOff && cancel != nil {
+			cancel()
+		}
+		e.wg.Done()
+	}()
 	id := uuid.NewString()
 	logPath := filepath.Join(e.logDir, task.ID, id+".log")
 	execution := domain.Execution{ID: id, TaskID: task.ID, Trigger: trigger, Status: domain.ExecutionStarting, LogPath: logPath, CreatedAt: time.Now().UTC()}
@@ -325,7 +391,7 @@ func (e *Engine) dispatch(task domain.Task, trigger domain.Trigger) (domain.Exec
 	if err != nil {
 		return domain.Execution{}, err
 	}
-	handle, err := e.runner.Start(e.ctx, task, logPath)
+	handle, err := e.runner.Start(ctx, task, logPath)
 	if err != nil {
 		now := time.Now().UTC()
 		created.Status = domain.ExecutionFailed
@@ -344,7 +410,7 @@ func (e *Engine) dispatch(task domain.Task, trigger domain.Trigger) (domain.Exec
 		return created, err
 	}
 	e.mu.Lock()
-	active := &activeExecution{taskID: task.ID, handle: handle}
+	active := &activeExecution{taskID: task.ID, handle: handle, cancel: cancel}
 	e.active[id] = active
 	if e.byTask[task.ID] == nil {
 		e.byTask[task.ID] = map[string]struct{}{}
@@ -352,6 +418,7 @@ func (e *Engine) dispatch(task domain.Task, trigger domain.Trigger) (domain.Exec
 	e.byTask[task.ID][id] = struct{}{}
 	e.runtime[task.ID] = RuntimeState{State: "running", ExecutionID: id, PID: handle.PID}
 	e.wg.Add(1)
+	handedOff = true
 	e.mu.Unlock()
 	go e.observe(created, active)
 	return created, nil
@@ -359,6 +426,9 @@ func (e *Engine) dispatch(task domain.Task, trigger domain.Trigger) (domain.Exec
 
 func (e *Engine) observe(execution domain.Execution, active *activeExecution) {
 	defer e.wg.Done()
+	if active.cancel != nil {
+		defer active.cancel()
+	}
 	result := active.handle.Wait()
 	active.mu.Lock()
 	defer active.mu.Unlock()
@@ -367,7 +437,7 @@ func (e *Engine) observe(execution domain.Execution, active *activeExecution) {
 	execution.ExitCode = &result.ExitCode
 	if errors.Is(result.Err, context.Canceled) {
 		execution.Status = domain.ExecutionCanceled
-	} else if result.ExitCode == 0 {
+	} else if result.ExitCode == 0 && result.Err == nil {
 		execution.Status = domain.ExecutionSucceeded
 	} else {
 		execution.Status = domain.ExecutionFailed
@@ -379,6 +449,7 @@ func (e *Engine) observe(execution domain.Execution, active *activeExecution) {
 		slog.Error("update execution", "error", err)
 	}
 	e.mu.Lock()
+	e.slots--
 	delete(e.active, execution.ID)
 	delete(e.byTask[execution.TaskID], execution.ID)
 	if len(e.byTask[execution.TaskID]) == 0 {
@@ -403,18 +474,22 @@ func (e *Engine) startSupervisor(task domain.Task) {
 		cancel()
 		return
 	}
-	e.supervisors[task.ID] = supervisor{cancel: cancel}
+	supervisorID := uuid.NewString()
+	e.supervisors[task.ID] = supervisor{cancel: cancel, id: supervisorID}
 	e.wg.Add(1)
 	e.mu.Unlock()
 	go func() {
 		defer e.wg.Done()
 		defer func() {
 			e.mu.Lock()
+			defer e.mu.Unlock()
+			if current, exists := e.supervisors[task.ID]; exists && current.id != supervisorID {
+				return
+			}
 			delete(e.supervisors, task.ID)
 			if e.runtime[task.ID].State != "failed" {
 				e.runtime[task.ID] = RuntimeState{State: "idle"}
 			}
-			e.mu.Unlock()
 		}()
 		failures := 0
 		for {
@@ -426,24 +501,47 @@ func (e *Engine) startSupervisor(task domain.Task) {
 			e.mu.Lock()
 			e.runtime[task.ID] = RuntimeState{State: "starting"}
 			e.mu.Unlock()
-			execution, err := e.dispatch(task, domain.TriggerSupervisor)
+			execution, err := e.dispatchContext(ctx, task, domain.TriggerSupervisor)
+			failed := false
+			failureMessage := ""
 			if err != nil {
-				if errors.Is(err, ErrAlreadyRunning) {
+				if errors.Is(err, ErrAlreadyRunning) || errors.Is(err, ErrConcurrencyLimit) {
 					time.Sleep(100 * time.Millisecond)
 					continue
 				}
 				slog.Error("supervisor dispatch", "task", task.ID, "error", err)
-				return
+				if ctx.Err() != nil {
+					return
+				}
+				failed = true
+				failureMessage = err.Error()
+			} else {
+				e.mu.RLock()
+				active := e.active[execution.ID]
+				e.mu.RUnlock()
+				var result runner.Result
+				if active != nil {
+					result = active.handle.Wait()
+				} else {
+					// A short command may already have been persisted and removed by observe.
+					finished, err := e.store.GetExecution(ctx, execution.ID)
+					if err != nil || finished.StartedAt == nil || finished.FinishedAt == nil || finished.ExitCode == nil {
+						return
+					}
+					result = runner.Result{StartedAt: *finished.StartedAt, FinishedAt: *finished.FinishedAt, ExitCode: *finished.ExitCode}
+					if finished.Error != "" {
+						result.Err = errors.New(finished.Error)
+					}
+				}
+				if ctx.Err() != nil {
+					return
+				}
+				duration := result.FinishedAt.Sub(result.StartedAt)
+				failed = result.Err != nil || result.ExitCode != 0 || duration < time.Duration(task.MinRunSeconds)*time.Second
+				if result.Err != nil {
+					failureMessage = result.Err.Error()
+				}
 			}
-			e.mu.RLock()
-			active := e.active[execution.ID]
-			e.mu.RUnlock()
-			if active == nil {
-				return
-			}
-			result := active.handle.Wait()
-			duration := result.FinishedAt.Sub(result.StartedAt)
-			failed := result.ExitCode != 0 || duration < time.Duration(task.MinRunSeconds)*time.Second
 			if task.RestartPolicy == domain.RestartNever || task.RestartPolicy == domain.RestartOnFailure && !failed {
 				e.mu.Lock()
 				e.runtime[task.ID] = RuntimeState{State: "idle"}
@@ -458,14 +556,15 @@ func (e *Engine) startSupervisor(task domain.Task) {
 			if task.MaxRetries > 0 && failures >= task.MaxRetries {
 				_ = e.store.SetTaskEnabled(context.Background(), task.ID, false)
 				e.mu.Lock()
-				e.runtime[task.ID] = RuntimeState{State: "failed"}
+				e.runtime[task.ID] = RuntimeState{State: "failed", Error: failureMessage, RetryCount: failures}
 				e.mu.Unlock()
 				return
 			}
-			e.mu.Lock()
-			e.runtime[task.ID] = RuntimeState{State: "backoff"}
-			e.mu.Unlock()
 			delay := time.Second * time.Duration(1<<min(failures, 4))
+			nextRetry := time.Now().Add(delay)
+			e.mu.Lock()
+			e.runtime[task.ID] = RuntimeState{State: "backoff", Error: failureMessage, RetryCount: failures, NextRetryAt: &nextRetry}
+			e.mu.Unlock()
 			timer := time.NewTimer(delay)
 			select {
 			case <-ctx.Done():

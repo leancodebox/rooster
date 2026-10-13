@@ -44,6 +44,42 @@ func TestTaskAndExecutionLifecycle(t *testing.T) {
 	}
 }
 
+func TestBackupRestoresCommittedWALDataAndRefusesOverwrite(t *testing.T) {
+	dir := t.TempDir()
+	source, err := Open(filepath.Join(dir, "source.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	ctx := context.Background()
+	task := domain.Task{ID: "backup-task", Name: "backup", Kind: domain.TaskKindResident, CommandMode: domain.CommandModeShell, Command: "echo backup", OverlapPolicy: domain.OverlapSkip, RestartPolicy: domain.RestartNever}
+	if _, err := source.CreateTask(ctx, task); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(dir, "snapshot.db")
+	if err := source.Backup(ctx, destination); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.Backup(ctx, destination); err == nil {
+		t.Fatal("backup overwrote existing snapshot")
+	}
+	restored, err := Open(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restored.Close()
+	got, err := restored.GetTask(ctx, task.ID)
+	if err != nil || got.Command != task.Command {
+		t.Fatalf("restored task: %#v, %v", got, err)
+	}
+	if err := source.DeleteTask(ctx, task.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := restored.GetTask(ctx, task.ID); err != nil {
+		t.Fatalf("snapshot changed with source: %v", err)
+	}
+}
+
 func TestMarkInterruptedExecutions(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "rooster.db"))
 	if err != nil {

@@ -20,18 +20,39 @@ import (
 )
 
 type Application struct {
-	store     *storesqlite.Store
-	engine    *engine.Engine
-	server    *httpapi.Server
-	listener  net.Listener
-	serveErr  chan error
-	closeOnce sync.Once
+	store        *storesqlite.Store
+	engine       *engine.Engine
+	server       *httpapi.Server
+	listener     net.Listener
+	serveErr     chan error
+	closeOnce    sync.Once
+	instanceLock *os.File
+	closeDone    chan struct{}
+	closeErr     error
 }
 
 func Start(ctx context.Context, dataDir, address string, assets fs.FS) (*Application, error) {
+	limits, err := executionLimits()
+	if err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(filepath.Join(dataDir, "logs"), 0o755); err != nil {
 		return nil, fmt.Errorf("create data directory: %w", err)
 	}
+	instanceLock, err := os.OpenFile(filepath.Join(dataDir, "rooster.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("open instance lock: %w", err)
+	}
+	if err := lockFile(instanceLock); err != nil {
+		instanceLock.Close()
+		return nil, fmt.Errorf("data directory already in use or cannot be locked: %w", err)
+	}
+	started := false
+	defer func() {
+		if !started {
+			instanceLock.Close()
+		}
+	}()
 	st, err := storesqlite.Open(filepath.Join(dataDir, "rooster.db"))
 	if err != nil {
 		return nil, err
@@ -42,7 +63,7 @@ func Start(ctx context.Context, dataDir, address string, assets fs.FS) (*Applica
 		slog.Warn("using inherited environment", "error", err)
 	}
 	cancel()
-	eng := engine.New(st, runner.New(environment), filepath.Join(dataDir, "logs"))
+	eng := engine.New(st, runner.New(environment), filepath.Join(dataDir, "logs"), limits)
 	if err := eng.Start(ctx); err != nil {
 		st.Close()
 		return nil, err
@@ -57,6 +78,9 @@ func Start(ctx context.Context, dataDir, address string, assets fs.FS) (*Applica
 	}
 	server := httpapi.New(eng, assets)
 	app := &Application{store: st, engine: eng, server: server, listener: listener, serveErr: make(chan error, 1)}
+	app.instanceLock = instanceLock
+	app.closeDone = make(chan struct{})
+	started = true
 	go func() { app.serveErr <- server.Serve(listener) }()
 	slog.Info("rooster ready", "url", app.URL(), "data", dataDir)
 	return app, nil
@@ -89,19 +113,34 @@ func (a *Application) URL() string              { return "http://" + a.listener.
 func (a *Application) ServeError() <-chan error { return a.serveErr }
 
 func (a *Application) Close(ctx context.Context) error {
-	var result error
 	a.closeOnce.Do(func() {
-		if err := a.server.Shutdown(ctx); err != nil && result == nil {
-			result = err
-		}
-		if err := a.engine.Close(ctx); err != nil && result == nil {
-			result = err
-		}
-		if err := a.store.Close(); err != nil && result == nil {
-			result = err
-		}
+		go func() {
+			defer close(a.closeDone)
+			// Keep the database and instance lock until all executions are reaped,
+			// even if a caller stops waiting for graceful shutdown.
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := a.server.Shutdown(shutdownCtx); err != nil {
+				a.closeErr = err
+				_ = a.server.Shutdown(context.Background())
+			}
+			if err := a.engine.Close(context.Background()); err != nil && a.closeErr == nil {
+				a.closeErr = err
+			}
+			if err := a.store.Close(); err != nil && a.closeErr == nil {
+				a.closeErr = err
+			}
+			if err := a.instanceLock.Close(); err != nil && a.closeErr == nil {
+				a.closeErr = err
+			}
+		}()
 	})
-	return result
+	select {
+	case <-a.closeDone:
+		return a.closeErr
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func IsExpectedServerClose(err error) bool { return err == nil || err == http.ErrServerClosed }
