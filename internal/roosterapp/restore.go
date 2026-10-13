@@ -37,24 +37,45 @@ func RestoreSnapshot(ctx context.Context, source, destination string) error {
 		return fmt.Errorf("restore requires a new destination directory: %w", err)
 	}
 	complete := false
+	locked := false
+	databaseCreated := false
+	logsCreated := false
+	var lock *os.File
 	defer func() {
-		if !complete {
-			_ = os.RemoveAll(target)
+		if !complete && locked {
+			// Remove only restore-owned artifacts; never recursively erase a
+			// destination another process might have populated during failure.
+			if databaseCreated {
+				for _, name := range []string{"rooster.db", "rooster.db-wal", "rooster.db-shm", "rooster.db-journal"} {
+					_ = os.Remove(filepath.Join(target, name))
+				}
+			}
+			if logsCreated {
+				_ = os.Remove(filepath.Join(target, "logs"))
+			}
+		}
+		if lock != nil {
+			_ = lock.Close()
+		}
+		if !complete && locked {
+			_ = os.Remove(filepath.Join(target, "rooster.lock"))
+			_ = os.Remove(target)
 		}
 	}()
-	lock, err := os.OpenFile(filepath.Join(target, "rooster.lock"), os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
+	lock, err = os.OpenFile(filepath.Join(target, "rooster.lock"), os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
 	if err != nil {
 		return err
 	}
-	defer lock.Close()
 	if err := lockFile(lock); err != nil {
 		return err
 	}
+	locked = true
 	path := filepath.Join(target, "rooster.db")
 	output, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
+	databaseCreated = true
 	_, copyErr := io.Copy(output, input)
 	syncErr := output.Sync()
 	closeErr := output.Close()
@@ -71,6 +92,7 @@ func RestoreSnapshot(ctx context.Context, source, destination string) error {
 	if err := os.Mkdir(logDir, 0o700); err != nil {
 		return err
 	}
+	logsCreated = true
 	if err := storesqlite.PrepareRestoredSnapshot(ctx, path, logDir); err != nil {
 		return err
 	}

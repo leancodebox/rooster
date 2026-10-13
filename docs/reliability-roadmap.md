@@ -36,17 +36,22 @@
 - Serialize enable/disable persistence and reconciliation; wait for canceled supervisors to exit before replacement, including recovery after interrupted disable requests.
 - Add subprocess forced-exit lock-release regression and five-cycle rapid resident disable/enable regression; both pass under the race detector using temporary directories.
 
-Validation: local frontend production build and ESLint passed; `go test -race ./internal/...` passed with temporary databases. Duplicate-instance, forced-exit lock-release, startup-failure exhaustion, manual-stop, concurrent-start and rapid-toggle regressions are covered. Mocked-API browser checks cover maintenance confirmation and log controls. CI has not run remotely; release-wide integrated acceptance is still pending.
+Validation: local frontend production build and ESLint passed; `go test -race ./internal/...` passed with temporary databases. Duplicate-instance, forced-exit lock-release, startup-failure exhaustion, manual-stop, concurrent-start and rapid-toggle regressions are covered. Mocked-API browser checks cover maintenance confirmation and log controls. Real HTTP integrated acceptance passes using temporary original/restored instances and OS-allocated loopback ports. Remote CI and non-macOS runtime behavior have not been exercised locally.
 
-## Remaining Work
+## Deferred Enhancements
 
-- Release-wide integrated acceptance with an isolated instance before production deployment.
-- Task-specific timeout/concurrency editing in the UI (current limits are instance-wide defaults).
+- Task-specific timeout/concurrency editing in the UI is deferred by user choice (current limits are instance-wide defaults).
 - Optional scheduled cleanup/total disk budget. Preview/apply UI and backend are implemented; cleanup is not enabled automatically.
 - Optional interactive restore UI and log-bundle import. Guarded offline snapshot restore is implemented; existing directories are never overwritten and archived log files are not part of a database snapshot.
-- Persist skip/cancellation reasons and add native tray notifications; in-page retry-exhaustion feedback and timeout failure reasons are implemented.
+- Persist additional skip/cancellation reasons; in-page retry-exhaustion feedback and timeout failure reasons are implemented. Native tray notifications were explicitly excluded by the user.
 - Cross-file log search. Current and archived file selection, per-file tail filtering, follow mode, copy and downloads are implemented.
 - Retain stable task selection during runtime updates and expand lifecycle transition regressions.
+
+## Final Acceptance
+
+The final integration regression creates tasks through HTTP, checks manual stop disables supervision, verifies bounded startup failure and execution timeout, downloads a live consistent snapshot, restores to a new directory, starts the restored instance with all tasks disabled, and checks retention preview/apply with an old managed log. It also serves the embedded frontend and exports task configuration.
+
+Final CR includes lifecycle concurrency, shutdown/lock ownership, backup/restore boundaries, retention deletion paths, archive handling, and frontend update behavior. Restore rollback was narrowed to known generated artifacts instead of recursive destination removal. No production API, database, process, desktop package, or log directory was used for acceptance. Development is complete for the agreed merge scope; optional enhancements above are deferred rather than release blockers.
 
 ## Notes
 
