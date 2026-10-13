@@ -59,10 +59,18 @@ unset disables each limit. Timeouts record failure with `context deadline exceed
 Backup snapshots contain tasks, environment values, and execution metadata;
 log files are not included. Exported configurations also contain environment
 values. Keep these downloads private. Backup creation never replaces an existing
-file. Restore is currently an offline procedure: close the destination instance,
-use a separate data directory, and open the downloaded database there. Enabled
-tasks in a restored database resume when Rooster starts; use isolated test commands
-when validating restoration. Log paths retain their original locations.
+file. Restore with the offline command below, using a target directory that does
+not already exist. All restored tasks are disabled; interrupted execution records
+are marked failed and log paths are moved into the new directory. Snapshot restore
+does not restore log files or start any commands. Existing data directories cannot
+be replaced by this command.
+
+```sh
+go run ./cmd/rooster-restore -backup /path/to/downloaded/rooster.db -destination /path/to/new-data-directory
+```
+
+Use standalone snapshot downloads rather than copying a live SQLite database;
+a source with a nonempty WAL is rejected.
 
 ## History and log retention
 
