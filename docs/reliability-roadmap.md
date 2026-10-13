@@ -27,6 +27,8 @@
 - Add opt-in instance-wide execution timeout, global concurrency cap, and per-task concurrency cap.
 - Track reservations until process completion and release them on startup failures. Record deadline expiration separately from manual cancellation.
 - Add explicit retention preview/apply API with age plus per-task minimum history, managed-file checks, rotation archive cleanup, and partial-error reporting.
+- Review fixes: consume persisted results when a short command completes before supervisor lookup; keep the instance lock/database until asynchronous shutdown finishes.
+- Add log-tail line filtering, copy displayed output, full-current-file download, and execution failure reason display in the log dialog. Build/lint passed; rendered interaction validation remains pending.
 
 Validation: local frontend production build and ESLint passed; `go test -race ./internal/...` passed with temporary databases. Duplicate-instance, lock-release, startup-failure exhaustion, manual-stop, and concurrent-start regressions are covered. CI has not run remotely; abnormal process termination and rendered UI behavior still need validation.
 
@@ -37,7 +39,7 @@ Validation: local frontend production build and ESLint passed; `go test -race ./
 - Retention UI and optional scheduled cleanup/total disk budget. The explicit preview/apply backend is implemented; it is not enabled automatically.
 - Backup/export UI, guarded restore workflow, and log-directory portability. Snapshot reopening is covered; an interactive restore workflow is not implemented.
 - Record skip, cancellation, timeout, and retry-exhaustion reasons; add failure notifications.
-- Log search, copy/download, follow-output control, and historical log access.
+- Follow-output control and historical archive access. Tail filtering, copy and current-file download are implemented; they do not search archived output.
 - Retain stable task selection during runtime updates and expand lifecycle transition regressions.
 
 ## Notes

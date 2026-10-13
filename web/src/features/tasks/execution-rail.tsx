@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   Clock3Icon,
+  CopyIcon,
+  DownloadIcon,
   FileTextIcon,
   LoaderCircleIcon,
   RotateCwIcon,
@@ -9,6 +11,13 @@ import {
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip"
 import {
   Dialog,
   DialogContent,
@@ -35,6 +44,16 @@ export function ExecutionRail({ task }: { task: Task | null }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [log, setLog] = useState("")
   const [loading, setLoading] = useState(false)
+  const [logQuery, setLogQuery] = useState("")
+  const displayedLog = useMemo(() => {
+    const query = logQuery.trim().toLowerCase()
+    return query
+      ? log
+          .split("\n")
+          .filter((line) => line.toLowerCase().includes(query))
+          .join("\n")
+      : log
+  }, [log, logQuery])
   const selected =
     executions.find((execution) => execution.id === selectedId) ?? null
   const logIsLive =
@@ -86,6 +105,7 @@ export function ExecutionRail({ task }: { task: Task | null }) {
   }, [selectedId, logIsLive])
 
   function inspect(execution: Execution) {
+    setLogQuery("")
     setLog("正在读取日志...")
     setSelectedId(execution.id)
   }
@@ -191,9 +211,70 @@ export function ExecutionRail({ task }: { task: Task | null }) {
                     : ""}
                 </DialogDescription>
               </DialogHeader>
+              <div className="flex items-center gap-2 border-b px-5 py-2">
+                <Input
+                  className="min-w-0 flex-1"
+                  value={logQuery}
+                  onChange={(event) => setLogQuery(event.target.value)}
+                  placeholder="筛选当前加载日志"
+                  aria-label="筛选当前加载日志"
+                />
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="复制当前显示日志"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(displayedLog)
+                            toast.success("日志已复制")
+                          } catch (error) {
+                            toast.error(messageOf(error))
+                          }
+                        }}
+                      />
+                    }
+                  >
+                    <CopyIcon />
+                  </TooltipTrigger>
+                  <TooltipContent>复制当前显示日志</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        nativeButton={false}
+                        render={
+                          <a
+                            href={`/api/executions/${encodeURIComponent(selected.id)}/logs?download=1`}
+                            download
+                            aria-label="下载完整当前日志"
+                          />
+                        }
+                      />
+                    }
+                  >
+                    <DownloadIcon />
+                  </TooltipTrigger>
+                  <TooltipContent>下载完整当前日志</TooltipContent>
+                </Tooltip>
+              </div>
+              {selected.error ? (
+                <p
+                  role="status"
+                  className="shrink-0 border-b px-5 py-2 text-xs break-words text-destructive"
+                >
+                  {selected.error}
+                </p>
+              ) : null}
               <ScrollArea className="min-h-0 flex-1">
                 <pre className="min-h-full bg-terminal p-5 font-mono text-xs leading-5 break-all whitespace-pre-wrap text-terminal-foreground">
-                  {log || "暂无输出"}
+                  {displayedLog ||
+                    (logQuery.trim() ? "没有匹配的日志" : "暂无输出")}
                 </pre>
               </ScrollArea>
             </>
