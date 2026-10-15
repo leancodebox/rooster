@@ -7,6 +7,7 @@ import { defineConfig } from "vite"
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
+    chunkSizeWarningLimit: 1000,
     outDir: "../internal/httpapi/webdist",
     emptyOutDir: true,
   },

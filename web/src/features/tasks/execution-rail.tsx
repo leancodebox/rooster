@@ -65,7 +65,7 @@ export function ExecutionRail({ task }: { task: Task | null }) {
       { value: "", label: "当前日志" },
       ...archives.map((file, index) => ({
         value: file.name,
-        label: `归档 ${index + 1} · ${(file.size / 1024).toFixed(1)} KiB`,
+        label: `历史归档 ${index + 1} · ${(file.size / 1024).toFixed(1)} KiB`,
       })),
     ],
     [archives]
@@ -287,93 +287,99 @@ export function ExecutionRail({ task }: { task: Task | null }) {
                     : ""}
                 </DialogDescription>
               </DialogHeader>
-              <div className="flex flex-wrap items-center gap-2 border-b px-5 py-2">
-                <Select
-                  items={logFileItems}
-                  value={archive}
-                  onValueChange={(value) => {
-                    if (value !== null) {
-                      setArchive(value)
-                      setLog("正在读取日志...")
-                      setLogQuery("")
-                    }
-                  }}
-                >
-                  <SelectTrigger
-                    aria-label="日志文件"
-                    className="w-full sm:w-44"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {logFileItems.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                <Input
-                  className="min-w-0 flex-1 basis-full sm:basis-auto"
-                  value={logQuery}
-                  onChange={(event) => setLogQuery(event.target.value)}
-                  placeholder="筛选当前加载日志"
-                  aria-label="筛选当前加载日志"
-                />
-                <label className="flex shrink-0 items-center gap-2 text-xs">
-                  <Switch
-                    size="sm"
-                    checked={followOutput}
-                    onCheckedChange={setFollowOutput}
-                    aria-label="跟随输出"
-                  />
-                  跟随输出
-                </label>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="复制当前显示日志"
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(displayedLog)
-                            toast.success("日志已复制")
-                          } catch (error) {
-                            toast.error(messageOf(error))
-                          }
-                        }}
-                      />
-                    }
-                  >
-                    <CopyIcon />
-                  </TooltipTrigger>
-                  <TooltipContent>复制当前显示日志</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        nativeButton={false}
-                        render={
-                          <a
-                            href={api.logURL(selected.id, archive, true)}
-                            download
-                            aria-label="下载所选日志文件"
-                          />
+              <div className="grid grid-cols-1 items-center gap-2 border-b px-5 py-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+                  {archives.length > 0 || archive ? (
+                    <Select
+                      items={logFileItems}
+                      value={archive}
+                      onValueChange={(value) => {
+                        if (value !== null) {
+                          setArchive(value)
+                          setLog("正在读取日志...")
+                          setLogQuery("")
                         }
-                      />
-                    }
-                  >
-                    <DownloadIcon />
-                  </TooltipTrigger>
-                  <TooltipContent>下载所选日志文件</TooltipContent>
-                </Tooltip>
+                      }}
+                    >
+                      <SelectTrigger
+                        aria-label="当前日志与历史归档"
+                        className="w-full shrink-0 sm:w-48"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {logFileItems.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  ) : null}
+                  <Input
+                    className="w-full min-w-0 flex-1"
+                    value={logQuery}
+                    onChange={(event) => setLogQuery(event.target.value)}
+                    placeholder="筛选当前加载日志"
+                    aria-label="筛选当前加载日志"
+                  />
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <label className="flex shrink-0 items-center gap-2 text-xs whitespace-nowrap">
+                    <Switch
+                      size="sm"
+                      checked={followOutput}
+                      onCheckedChange={setFollowOutput}
+                      aria-label="跟随输出"
+                    />
+                    跟随输出
+                  </label>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="复制当前显示日志"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(displayedLog)
+                              toast.success("日志已复制")
+                            } catch (error) {
+                              toast.error(messageOf(error))
+                            }
+                          }}
+                        />
+                      }
+                    >
+                      <CopyIcon />
+                    </TooltipTrigger>
+                    <TooltipContent>复制当前显示日志</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          nativeButton={false}
+                          render={
+                            <a
+                              href={api.logURL(selected.id, archive, true)}
+                              download
+                              aria-label="下载所选日志文件"
+                            />
+                          }
+                        />
+                      }
+                    >
+                      <DownloadIcon />
+                    </TooltipTrigger>
+                    <TooltipContent>下载所选日志文件</TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
               {archive ? (
                 <p className="shrink-0 px-5 py-1 font-mono text-xs break-all text-muted-foreground">
