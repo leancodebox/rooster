@@ -82,3 +82,24 @@ func TestRunnerUsesTaskEnvironmentAndWorkingDirectory(t *testing.T) {
 		t.Fatalf("log = %q, want %q", content, want)
 	}
 }
+
+func TestExecFindsCommandInTaskPath(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PATH", "/usr/bin:/bin")
+	if err := os.WriteFile(filepath.Join(dir, "rooster-test-command"), []byte("#!/bin/sh\nprintf ready"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(dir, "run.log")
+	task := domain.Task{ID: "task", Name: "exec path", Kind: domain.TaskKindResident, CommandMode: domain.CommandModeExec, Command: "rooster-test-command", Environment: map[string]string{"PATH": dir}, OverlapPolicy: domain.OverlapSkip, RestartPolicy: domain.RestartNever}
+	h, err := New(NewEnvironmentProvider()).Start(context.Background(), task, logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result := h.Wait(); result.ExitCode != 0 {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+	content, err := os.ReadFile(logPath)
+	if err != nil || string(content) != "ready" {
+		t.Fatalf("log = %q, error = %v", content, err)
+	}
+}

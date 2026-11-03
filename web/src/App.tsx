@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -141,7 +142,7 @@ export default function App() {
   return (
     <main className="min-h-svh bg-background text-foreground">
       <header className="border-b bg-background">
-        <div className="mx-auto flex h-16 max-w-[1680px] items-center justify-between gap-4 px-4 md:px-6">
+        <div className="mx-auto flex min-h-16 max-w-[1680px] flex-wrap items-center justify-between gap-4 px-4 py-3 md:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
               <SparklesIcon className="size-4" />
@@ -154,6 +155,7 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <AgentAccess />
             <DataMaintenance />
             <Tooltip>

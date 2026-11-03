@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -69,6 +70,16 @@ func (r *Runner) Start(parent context.Context, task domain.Task, logPath string)
 	}
 	cmd.Dir = task.WorkingDir
 	cmd.Env = r.environment.Resolve(task.Environment)
+	// exec.Command resolves bare names against the parent PATH before Env is set.
+	if runtime.GOOS != "windows" && task.CommandMode == domain.CommandModeExec && !strings.ContainsRune(task.Command, '/') {
+		path, err := executableInEnvironment(task.Command, cmd.Env, cmd.Dir)
+		if err != nil {
+			logFile.Close()
+			return nil, err
+		}
+		cmd.Path = path
+		cmd.Err = nil
+	}
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	configureProcess(cmd)
@@ -115,6 +126,27 @@ func (r *Runner) Start(parent context.Context, task domain.Task, logPath string)
 		close(h.done)
 	}()
 	return h, nil
+}
+
+func executableInEnvironment(name string, environment []string, dir string) (string, error) {
+	for _, entry := range filepath.SplitList(environmentMap(environment)["PATH"]) {
+		if entry == "" {
+			continue
+		}
+		candidate := filepath.Join(entry, name)
+		if !filepath.IsAbs(candidate) && dir != "" {
+			candidate = filepath.Join(dir, candidate)
+		}
+		candidate, err := filepath.Abs(candidate)
+		if err != nil {
+			continue
+		}
+		info, err := os.Stat(candidate)
+		if err == nil && !info.IsDir() && info.Mode().Perm()&0o111 != 0 {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("find executable %q in task PATH: %w", name, exec.ErrNotFound)
 }
 
 func buildCommand(task domain.Task) (*exec.Cmd, error) {

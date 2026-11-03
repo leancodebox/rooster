@@ -58,11 +58,10 @@ func Start(ctx context.Context, dataDir, address string, assets fs.FS) (*Applica
 		return nil, err
 	}
 	environment := runner.NewEnvironmentProvider()
-	refreshCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
-	if err := environment.Refresh(refreshCtx, ""); err != nil {
-		slog.Warn("using inherited environment", "error", err)
+	if err := environment.RefreshWithRetry(ctx, ""); err != nil {
+		st.Close()
+		return nil, fmt.Errorf("initialize task environment: %w", err)
 	}
-	cancel()
 	eng := engine.New(st, runner.New(environment), filepath.Join(dataDir, "logs"), limits)
 	if err := eng.Start(ctx); err != nil {
 		st.Close()

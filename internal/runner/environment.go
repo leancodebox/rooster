@@ -3,6 +3,7 @@ package runner
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
@@ -18,7 +19,29 @@ type EnvironmentProvider struct {
 }
 
 func NewEnvironmentProvider() *EnvironmentProvider {
-	return &EnvironmentProvider{snapshot: environmentMap(os.Environ())}
+	return &EnvironmentProvider{snapshot: withFallbackPaths(environmentMap(os.Environ()))}
+}
+
+func (p *EnvironmentProvider) RefreshWithRetry(ctx context.Context, shell string) error {
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		if err = p.Refresh(ctx, shell); err == nil {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if attempt < 2 {
+			timer := time.NewTimer(2 * time.Second)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
+	}
+	return fmt.Errorf("load login shell environment after 3 attempts: %w", err)
 }
 
 func (p *EnvironmentProvider) Refresh(ctx context.Context, shell string) error {
@@ -27,19 +50,24 @@ func (p *EnvironmentProvider) Refresh(ctx context.Context, shell string) error {
 		if shell == "" {
 			shell = defaultShell()
 		}
-		loadCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		loadCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(loadCtx, shell, "-lic", "env -0")
+		cmd := exec.CommandContext(loadCtx, shell, "-lic", "/usr/bin/env -0")
+		cmd.WaitDelay = time.Second
 		cmd.Env = environmentSlice(withFallbackPaths(base))
 		var out bytes.Buffer
 		cmd.Stdout = &out
 		if err := cmd.Run(); err != nil {
-			return err
+			if loadCtx.Err() != nil {
+				return fmt.Errorf("load login shell environment: %w", loadCtx.Err())
+			}
+			return fmt.Errorf("load login shell environment: %w", err)
 		}
 		loaded := parseNullEnvironment(out.Bytes())
-		if len(loaded) > 0 {
-			base = loaded
+		if loaded["PATH"] == "" {
+			return fmt.Errorf("login shell returned no PATH")
 		}
+		base = loaded
 	}
 	base = withFallbackPaths(base)
 	p.mu.Lock()
